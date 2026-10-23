@@ -1,0 +1,15 @@
+:root {
+  --brand: #1664ff;
+  --brand-hover: #0e55df;
+  --success: #00a870;
+  --danger: #e53935;
+  --text-1: #1d2129;
+  --text-2: #4e5969;
+  --text-3: #86909c;
+  --line: #e5e6eb;
+  --fill: #f2f3f5;
+  --shell: #f9fafd;
+  --white: #ffffff;
+  --radius: 6px;
+  --shadow-menu: 0 8px 24px rgb(29 33 41 / 12%);
+}

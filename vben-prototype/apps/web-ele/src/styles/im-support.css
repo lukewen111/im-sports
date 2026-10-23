@@ -1,0 +1,37 @@
+:root {
+  --sidebar: 214 100% 94%;
+  --sidebar-deep: 214 100% 94%;
+  --menu: 214 100% 94%;
+}
+
+body {
+  min-width: 1180px;
+  letter-spacing: 0;
+}
+
+.el-button,
+.el-input,
+.el-select,
+.el-dialog,
+.el-table {
+  letter-spacing: 0;
+}
+
+[data-slot='sidebar'] {
+  border-right-color: #d8e3f1;
+}
+
+.bg-sidebar {
+  background-color: #dfecff !important;
+}
+
+.bg-sidebar .vben-menu-item:not(.is-active) {
+  pointer-events: none;
+  cursor: default;
+  background-color: transparent !important;
+  opacity: 1;
+}
+
+.bg-sidebar .vben-menu-item.is-active {
+  background-color: rgb(255 255 255 / 72%) !important;
+}
