@@ -21,7 +21,7 @@ export const channelMeta: Record<ChannelType, { addLabel: string; description: s
 export const channelTypes: ChannelType[] = ['web-widget', 'telegram', 'chat-page'];
 export const languages = ['自动', '简体中文', '繁体中文', '英语', '越南语', '泰语', '高棉语', '缅甸语', '老挝语', '西班牙语'];
 export const teams: Team[] = [
-  { accepting: true, id: 'team-default', name: '默认团队', status: 'active' },
+  { accepting: true, id: 'team-default', name: '通用团队', status: 'active' },
   { accepting: true, id: 'team-sales', name: '售前服务团队', status: 'active' },
   { accepting: false, id: 'team-after-sales', name: '售后服务团队', status: 'active' },
   { accepting: false, id: 'team-invalid', name: '历史失效团队', status: 'invalid' },
