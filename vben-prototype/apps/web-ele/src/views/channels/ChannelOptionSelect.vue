@@ -7,7 +7,7 @@ import TeamAvatar from './TeamAvatar.vue';
 
 export interface ChannelSelectOption { label: string; team?: Team; value: string }
 
-const props = defineProps<{ modelValue?: string; options: ChannelSelectOption[]; placeholder?: string; variant?: 'default' | 'team' }>();
+const props = defineProps<{ disabled?: boolean; modelValue?: string; options: ChannelSelectOption[]; placeholder?: string; variant?: 'default' | 'team' }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 const open = ref(false);
 const root = ref<HTMLElement>();
@@ -27,6 +27,7 @@ function onDocumentKeyDown(event: KeyboardEvent) {
   if (event.key === 'Escape') open.value = false;
 }
 function toggle() {
+  if (props.disabled) return;
   open.value = !open.value;
   if (open.value) {
     void nextTick(positionMenu);
@@ -58,7 +59,7 @@ onBeforeUnmount(cleanup);
 
 <template>
   <div ref="root" class="channel-option-select" :class="{ 'is-team-select': isTeamSelect }">
-    <button type="button" class="channel-option-select-trigger" :class="{ 'is-open': open }" :aria-expanded="open" @click="toggle">
+    <button type="button" class="channel-option-select-trigger" :class="{ 'is-open': open }" :aria-expanded="open" :disabled="disabled" @click="toggle">
       <span class="channel-option-select-value" :class="{ 'is-placeholder': !selected, 'is-team-value': isTeamSelect && selected }">
         <template v-if="isTeamSelect && selected"><span class="team-select-token" aria-hidden="true">{{ teamToken(selected) }}</span><span>{{ selected.label }}</span></template>
         <template v-else><TeamAvatar v-if="selected?.team" :team="selected.team" />{{ selected?.label || placeholder }}</template>

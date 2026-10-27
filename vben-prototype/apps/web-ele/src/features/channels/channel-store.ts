@@ -44,8 +44,10 @@ export const useChannelStore = defineStore('im-support-channels', () => {
     const value = token?.trim() ?? '';
     if (!/^\d+:\S+$/.test(value) || value.includes('invalid')) return { error: 'Bot Token无效，请检查后重试' };
     if (value.includes('offline')) return { error: '连接失败，请稍后重试' };
-    if (channels.value.some((item) => item.type === 'telegram' && item.id !== exceptId && item.botToken === value)) return { error: '该TG Bot已被其他渠道绑定' };
-    return {};
+    if (value.includes('external')) return { error: '该 Bot 正被其他系统使用' };
+    const botId = value.split(':')[0];
+    if (channels.value.some((item) => item.type === 'telegram' && item.id !== exceptId && (item.telegramBotId || item.botToken?.split(':')[0]) === botId)) return { error: '该TG Bot已被其他渠道绑定' };
+    return { botId };
   };
   const acknowledgeInstall = (id: string) => {
     const channel = channels.value.find((item) => item.id === id);

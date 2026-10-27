@@ -53,12 +53,16 @@
 .channels-page .channel-table th.el-table__cell { height: 42px; padding: 0; color: var(--source-foreground); background: var(--source-fill); font-size: 14px; font-weight: 600; }
 .channels-page .channel-table td.el-table__cell { height: 64px; padding: 0; color: var(--source-text); }
 .channels-page .channel-table .cell { padding: 0 16px; }
-.channels-page .channel-name-cell { display: flex; align-items: center; gap: 8px; padding: 0; background: none; border: 0; text-align: left; cursor: pointer; }
+.channels-page .channel-name-cell { display: flex; align-items: center; gap: 8px; padding: 0; text-align: left; }
 .channels-page .channel-name-cell > span:last-child { display: grid; gap: 2px; }
 .channels-page .channel-name-cell .channel-glyph { width: 30px; height: 30px; border-radius: 4px; }
 .channels-page .channel-name-cell .channel-glyph svg { width: 18px; height: 18px; }
+.channels-page .channel-title-button { padding: 0; background: none; border: 0; text-align: left; cursor: pointer; }
 .channels-page .channel-name-cell strong { font-size: 14px; font-weight: 600; }
 .channels-page .channel-name-cell small { color: var(--source-muted); font-size: 12px; }
+.channels-page .channel-name-cell small { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.channels-page .channel-name-cell small > span { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channels-page .channel-name-cell small a { color: #1664ff; font-size: 13px; line-height: 1; text-decoration: none; }
 .channels-page .agent-cell { display: flex; align-items: center; gap: 8px; color: var(--source-text); }
 .channels-page .readonly-team { display: inline-flex; height: 32px; align-items: center; gap: 8px; padding: 0 12px; color: var(--source-text); background: var(--source-fill); border-radius: 4px; }
 .channels-page .agent-cell i { display: grid; width: 28px; height: 28px; place-items: center; color: var(--source-primary); background: var(--source-primary-bg); border-radius: 50%; font-size: 10px; font-style: normal; }
@@ -95,6 +99,7 @@
 .channels-page .channel-option-select-trigger > span.is-placeholder, .channel-config-dialog .channel-option-select-trigger > span.is-placeholder { color: #86909c; }
 .channels-page .channel-option-select-trigger > i, .channel-config-dialog .channel-option-select-trigger > i { width: 8px; height: 8px; flex: 0 0 auto; border-right: 1.5px solid #4e5969; border-bottom: 1.5px solid #4e5969; transform: translateY(-2px) rotate(45deg); transition: transform 160ms ease; }
 .channels-page .channel-option-select-trigger.is-open > i, .channel-config-dialog .channel-option-select-trigger.is-open > i { transform: translateY(2px) rotate(225deg); }
+.channels-page .channel-option-select-trigger:disabled, .channel-config-dialog .channel-option-select-trigger:disabled { color: #86909c; background: #f2f3f5; border-color: transparent; box-shadow: none; cursor: not-allowed; }
 .channel-option-select-menu { position: fixed; z-index: 3000; display: grid; max-height: 220px; overflow-y: auto; padding: 4px; background: #fff; border: 1px solid #dde2e9; border-radius: 4px; box-shadow: 0 6px 18px rgba(12,13,14,.12); }
 .channel-option-select-menu button { display: flex; min-height: 36px; align-items: center; gap: 8px; padding: 0 8px; color: #4e5969; background: transparent; border: 0; border-radius: 4px; text-align: left; cursor: pointer; }
 .channel-option-select-menu button:hover, .channel-option-select-menu button.is-selected { color: #1664ff; background: #f3f7ff; }
@@ -163,6 +168,7 @@
 .channels-page .modern-preview-stage { position: relative; display: grid; height: auto; min-height: 0; flex: 1; place-items: center; overflow: auto; padding: 20px; background-color: #eef1f5; background-image: linear-gradient(45deg,#e5e8ec 25%,transparent 25%),linear-gradient(-45deg,#e5e8ec 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e5e8ec 75%),linear-gradient(-45deg,transparent 75%,#e5e8ec 75%); background-position: 0 0,0 10px,10px -10px,-10px 0; background-size: 20px 20px; }
 .channels-page .modern-preview-stage.is-web-widget { place-items: stretch; background-color: #fff; background-image: linear-gradient(45deg,#edf0f5 25%,transparent 25%),linear-gradient(-45deg,#edf0f5 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#edf0f5 75%),linear-gradient(-45deg,transparent 75%,#edf0f5 75%); }
 .channels-page .modern-preview-stage.is-mobile::after { display: none; }
+.channels-page .modern-preview-stage.is-mobile .widget-anchor { width: min(390px, 100%); min-height: 640px; margin: auto; overflow: hidden; background: #fff; border: 1px solid #dde2e9; border-radius: 18px; box-shadow: 0 12px 32px rgb(29 33 41 / 12%); }
 .channels-page .widget-anchor { position: static; display: flex; height: 100%; min-height: 0; flex-direction: column; justify-content: flex-end; padding-bottom: var(--widget-offset-y, 24px); }
 .channels-page .widget-anchor.bottom-left { align-items: flex-start; padding-left: var(--widget-offset-x, 24px); }
 .channels-page .widget-anchor.bottom-right { align-items: flex-end; padding-right: var(--widget-offset-x, 24px); }
@@ -202,6 +208,14 @@
 .channels-page .hidden-hint { position: absolute; top: 50%; left: 50%; color: var(--source-muted); transform: translate(-50%,-50%); }
 .channels-page .field-tip { color: var(--source-muted); }
 .channels-page .form-error { padding: 10px 12px; color: #d7312a; background: #feeced; border-radius: 4px; }
+.channels-page .visible-count, .channel-config-dialog .visible-count { display: block; width: 100%; margin-top: 4px; color: #86909c; font-size: 12px; text-align: right; }
+.channels-page .visible-count.is-error, .channel-config-dialog .visible-count.is-error { color: #d7312a; }
+.channels-page .image-upload.is-disabled, .channels-page .icon-picker .is-disabled { opacity: .55; cursor: not-allowed; }
+.channels-page .channel-empty { display: grid; justify-items: center; gap: 8px; padding: 44px 16px; color: #86909c; }
+.channels-page .channel-empty strong { color: #1d2129; font-size: 15px; }
+.channels-page .channel-empty .el-button { margin-top: 4px; }
+.channels-page .channel-access-denied { display: grid; min-height: calc(100vh - 70px); place-content: center; justify-items: center; gap: 8px; color: #86909c; background: #fff; }
+.channels-page .channel-access-denied strong { color: #1d2129; font-size: 18px; }
 .channels-page .dialog-copy { color: var(--source-text); }
 .channels-page .install-code { overflow: auto; padding: 16px; color: #e8eef8; background: #172033; border-radius: 7px; }
 .channels-page .share-row { display: flex; gap: 8px; }

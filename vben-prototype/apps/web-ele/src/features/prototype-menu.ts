@@ -1,5 +1,7 @@
 import type { MenuRecordRaw } from '@vben/types';
 
+const canViewChannels = typeof window === 'undefined' || new URLSearchParams(window.location.search).get('role') !== 'none';
+
 export const prototypeMenus: MenuRecordRaw[] = [
   { disabled: true, icon: 'lucide:bot', name: 'AI客服', path: '/prototype/ai' },
   { disabled: true, icon: 'lucide:gauge', name: '数据总览', path: '/prototype/dashboard' },
@@ -10,5 +12,5 @@ export const prototypeMenus: MenuRecordRaw[] = [
   { disabled: true, icon: 'lucide:user-round', name: '用户管理', path: '/prototype/users' },
   { disabled: true, icon: 'lucide:users-round', name: '团队管理', path: '/prototype/teams' },
   { disabled: true, icon: 'lucide:headphones', name: '客服信息管理', path: '/prototype/service' },
-  { icon: 'lucide:panels-top-left', name: '渠道管理', path: '/channels' },
+  ...(canViewChannels ? [{ icon: 'lucide:panels-top-left', name: '渠道管理', path: '/channels' }] : []),
 ];
