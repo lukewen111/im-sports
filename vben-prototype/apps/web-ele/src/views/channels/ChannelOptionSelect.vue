@@ -16,10 +16,6 @@ const menuStyle = ref<Record<string, string>>({});
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue));
 const isTeamSelect = computed(() => props.variant === 'team');
 
-function teamToken(option?: ChannelSelectOption) {
-  return (option?.team?.name || option?.label || '团').trim().slice(0, 1);
-}
-
 function onDocumentPointerDown(event: PointerEvent) {
   if (!root.value?.contains(event.target as Node) && !menu.value?.contains(event.target as Node)) open.value = false;
 }
@@ -61,14 +57,14 @@ onBeforeUnmount(cleanup);
   <div ref="root" class="channel-option-select" :class="{ 'is-team-select': isTeamSelect }">
     <button type="button" class="channel-option-select-trigger" :class="{ 'is-open': open }" :aria-expanded="open" :disabled="disabled" @click="toggle">
       <span class="channel-option-select-value" :class="{ 'is-placeholder': !selected, 'is-team-value': isTeamSelect && selected }">
-        <template v-if="isTeamSelect && selected"><span class="team-select-token" aria-hidden="true">{{ teamToken(selected) }}</span><span>{{ selected.label }}</span></template>
+        <template v-if="isTeamSelect && selected"><TeamAvatar :team="selected.team" /><span>{{ selected.label }}</span></template>
         <template v-else><TeamAvatar v-if="selected?.team" :team="selected.team" />{{ selected?.label || placeholder }}</template>
       </span><i aria-hidden="true"></i>
     </button>
     <Teleport to="body">
       <div v-if="open" ref="menu" class="channel-option-select-menu" :class="{ 'is-team-menu': isTeamSelect }" :style="menuStyle">
         <button v-for="option in options" :key="option.value" type="button" :aria-selected="option.value === modelValue" :class="{ 'is-selected': option.value === modelValue }" @click="choose(option.value)">
-          <template v-if="isTeamSelect"><span class="team-select-token" aria-hidden="true">{{ teamToken(option) }}</span><span>{{ option.label }}</span></template>
+          <template v-if="isTeamSelect"><TeamAvatar :team="option.team" /><span>{{ option.label }}</span></template>
           <template v-else><TeamAvatar v-if="option.team" :team="option.team" /><span>{{ option.label }}</span></template>
         </button>
       </div>

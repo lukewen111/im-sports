@@ -3,6 +3,8 @@ import type { RouteRecordRaw } from 'vue-router';
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 
+import { QiAppsSquare, QiRobot, QiUser, QiUserGroup } from 'qingicon-vue';
+
 import { $t } from '#/locales';
 
 const BasicLayout = () => import('#/layouts/basic.vue');
@@ -50,12 +52,52 @@ const coreRoutes: RouteRecordRaw[] = [
     redirect: preferences.app.defaultHomePath,
     children: [
       {
+        name: 'Team',
+        path: 'team',
+        redirect: '/team/members/all',
+        meta: { icon: QiUserGroup, title: '团队' },
+        children: [
+          {
+            name: 'TeamMembers',
+            path: 'members',
+            redirect: '/team/members/all',
+            meta: { icon: QiUserGroup, title: '成员' },
+            children: [
+              {
+                name: 'TeamAllMembers',
+                path: 'all',
+                component: () => import('#/views/team/app.vue'),
+                meta: { icon: QiUserGroup, title: '全部人员' },
+              },
+              {
+                name: 'TeamHumanMembers',
+                path: 'human',
+                component: () => import('#/views/team/app.vue'),
+                meta: { icon: QiUser, title: '人类成员' },
+              },
+              {
+                name: 'TeamAiMembers',
+                path: 'ai',
+                component: () => import('#/views/team/app.vue'),
+                meta: { icon: QiRobot, title: 'AI 成员' },
+              },
+            ],
+          },
+          {
+            name: 'Teams',
+            path: 'teams',
+            component: () => import('#/views/team/app.vue'),
+            meta: { icon: QiUserGroup, title: '团队' },
+          },
+        ],
+      },
+      {
         name: 'Channels',
         path: 'channels',
         component: () => import('#/views/channels/app.vue'),
         meta: {
           affixTab: true,
-          icon: 'lucide:panels-top-left',
+          icon: QiAppsSquare,
           title: '渠道管理',
         },
       },

@@ -838,6 +838,9 @@ importers:
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@6.0.3)(vue@3.5.34(typescript@6.0.3))
+      qingicon-vue:
+        specifier: 2.0.4
+        version: 2.0.4(vue@3.5.34(typescript@6.0.3))
       vue:
         specifier: ^3.5.34
         version: 3.5.34(typescript@6.0.3)
@@ -9357,6 +9360,11 @@ packages:
   qified@0.10.1:
     resolution: {integrity: sha512-+Owyggi9IxT1ePKGafcI87ubSmxol6smwJ+RAHDQlx9+9cPwFWDiKFFCPuWhr9ignlGpZ9vDQLw67N4dcTVFEA==}
     engines: {node: '>=20'}
+
+  qingicon-vue@2.0.4:
+    resolution: {integrity: sha512-P38axgGloyCkbzW5IKX2rMb9t0KbJmkCdlJGhJwnpPWpSQlpddo28g94YZGKN5Pavssta6E9k1eBv1TMzrhdBw==}
+    peerDependencies:
+      vue: ^3.5.34
 
   qrcode@1.5.4:
     resolution: {integrity: sha512-1ca71Zgiu6ORjHqFBDpnSMTR2ReToX4l1Au1VFLyVeBTFavzQnv5JxMFr3ukHVKpSrSA2MCk0lNJSykjUfz7Zg==}
@@ -18717,6 +18725,10 @@ snapshots:
   qified@0.10.1:
     dependencies:
       hookified: 2.2.0
+
+  qingicon-vue@2.0.4(vue@3.5.34(typescript@6.0.3)):
+    dependencies:
+      vue: 3.5.34(typescript@6.0.3)
 
   qrcode@1.5.4:
     dependencies:

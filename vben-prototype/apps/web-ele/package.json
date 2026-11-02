@@ -44,6 +44,7 @@
     "dayjs": "catalog:",
     "element-plus": "catalog:",
     "pinia": "catalog:",
+    "qingicon-vue": "2.0.4",
     "vue": "catalog:",
     "vue-router": "catalog:"
   },

@@ -39,7 +39,8 @@ export const overridesPreferences = defineOverridesPreferences({
     collapsed: false,
     collapsedButton: true,
     draggable: false,
-    expandOnHover: false,
+    // Vben 当前布局内部以 true 表示禁用鼠标进入后自动展开／离开收起。
+    expandOnHover: true,
     fixedButton: false,
     width: 224,
   },

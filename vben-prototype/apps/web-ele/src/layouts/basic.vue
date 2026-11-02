@@ -7,7 +7,6 @@ import { useRouter } from 'vue-router';
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
 import { VBEN_DOC_URL, VBEN_GITHUB_URL } from '@vben/constants';
 import { useWatermark } from '@vben/hooks';
-import { BookOpenText, CircleHelp, SvgGithubIcon } from '@vben/icons';
 import {
   BasicLayout,
   LockScreen,
@@ -17,6 +16,8 @@ import {
 import { preferences, usePreferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
 import { openWindow } from '@vben/utils';
+
+import { QiBookOpenText, QiLink, QiQuestion, QiUser } from 'qingicon-vue';
 
 import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
@@ -90,7 +91,7 @@ const menus = computed(() => [
     handler: () => {
       router.push({ name: 'Profile' });
     },
-    icon: 'lucide:user',
+    icon: QiUser,
     text: $t('page.auth.profile'),
   },
   {
@@ -99,7 +100,7 @@ const menus = computed(() => [
         target: '_blank',
       });
     },
-    icon: BookOpenText,
+    icon: QiBookOpenText,
     text: $t('ui.widgets.document'),
   },
   {
@@ -108,7 +109,7 @@ const menus = computed(() => [
         target: '_blank',
       });
     },
-    icon: SvgGithubIcon,
+    icon: QiLink,
     text: 'GitHub',
   },
   {
@@ -117,7 +118,7 @@ const menus = computed(() => [
         target: '_blank',
       });
     },
-    icon: CircleHelp,
+    icon: QiQuestion,
     text: $t('ui.widgets.qa'),
   },
 ]);

@@ -2,7 +2,7 @@ import { createApp, watchEffect } from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
 import { registerLoadingDirective } from '@vben/common-ui';
-import { preferences } from '@vben/preferences';
+import { preferences, updatePreferences } from '@vben/preferences';
 import { initStores, useAccessStore, useUserStore } from '@vben/stores';
 import '@vben/styles';
 import '@vben/styles/ele';
@@ -20,8 +20,12 @@ import { router } from './router';
 
 import './styles/im-support.css';
 import './styles/channel-source-parity.css';
+import './styles/team-module.css';
 
 async function bootstrap(namespace: string) {
+  // 锁定手动折叠行为，并覆盖历史本地偏好，避免一级栏展开时遮挡业务二级导航。
+  updatePreferences({ sidebar: { expandOnHover: true } });
+
   // 初始化组件适配器
   await initComponentAdapter();
 

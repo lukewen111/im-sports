@@ -17,6 +17,17 @@ body {
   letter-spacing: 0;
 }
 
+.el-button--primary:not(.is-plain, .is-text, .is-link) {
+  --el-button-text-color: #fff;
+  --el-button-hover-text-color: #fff;
+  --el-button-active-text-color: #fff;
+  color: #fff !important;
+}
+
+.el-button--primary:not(.is-plain, .is-text, .is-link) :is(span, svg) {
+  color: #fff !important;
+}
+
 [data-slot='sidebar'] {
   border-right-color: #d8e3f1;
 }
@@ -26,8 +37,6 @@ body {
 }
 
 .bg-sidebar .vben-menu-item:not(.is-active) {
-  pointer-events: none;
-  cursor: default;
   background-color: transparent !important;
   opacity: 1;
 }

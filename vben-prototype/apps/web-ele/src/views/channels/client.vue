@@ -4,6 +4,8 @@ import type { Channel } from '#/features/channels/channel-data';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
+import { QiBell, QiBellOff, QiCharMinus, QiCharPlus, QiEmojiSmile, QiFile, QiRefresh2, QiSendRight } from 'qingicon-vue';
+
 import { foregroundForTheme } from '#/features/channels/channel-data';
 import { useChannelStore } from '#/features/channels/channel-store';
 
@@ -39,6 +41,11 @@ const isWidget = computed(() => route.name === 'ChannelWidget');
 const channel = computed<Channel | undefined>(() => isWidget.value
   ? store.channels.find((item) => item.id === String(route.params.channelId))
   : store.channels.find((item) => item.type === 'chat-page' && item.teamId === String(route.params.channelId)));
+const deletedTeamLink = computed(() => {
+  if (isWidget.value) return false;
+  try { return (JSON.parse(localStorage.getItem('im-support-vben:deleted-team-ids') || '[]') as string[]).includes(String(route.params.channelId)); }
+  catch { return false; }
+});
 const isMobile = ref(window.innerWidth < 768);
 const open = ref(!isWidget.value);
 const muted = ref(localStorage.getItem(`${MUTE_KEY}:${String(route.params.channelId)}`) === 'true');
@@ -273,8 +280,8 @@ onUnmounted(() => { document.body.classList.remove('channel-client-body'); docum
         <header>
           <span class="channel-client-avatar"><img v-if="channel.brandAvatar" :src="channel.brandAvatar" alt="" /><span v-else>{{ (channel.brandName || channel.name).slice(0, 1) }}</span></span>
           <span class="channel-client-brand"><strong>{{ channel.brandName || channel.name }}</strong><small v-if="channel.brandSignature">{{ channel.brandSignature }}</small></span>
-          <button type="button" :aria-label="muted ? '打开消息提示音' : '关闭消息提示音'" @click="toggleMute"><svg v-if="!muted" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M18 8a6 6 0 0 0-9.4-4.9M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 7-3 9h14M10 21h4" /></svg></button>
-          <button v-if="isWidget" type="button" aria-label="关闭聊天窗口" @click="toggleOpen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12" /></svg></button>
+          <button type="button" :aria-label="muted ? '打开消息提示音' : '关闭消息提示音'" @click="toggleMute"><QiBell v-if="!muted" :size="20" /><QiBellOff v-else :size="20" /></button>
+          <button v-if="isWidget" type="button" aria-label="关闭聊天窗口" @click="toggleOpen"><QiCharMinus :size="20" /></button>
         </header>
         <div ref="messageArea" class="channel-client-messages" @scroll="handleScroll">
           <template v-for="(message, index) in visibleMessages" :key="message.id">
@@ -290,23 +297,23 @@ onUnmounted(() => { document.body.classList.remove('channel-client-body'); docum
         </div>
         <button v-if="unread > 0" type="button" class="channel-client-new-messages" @click="scrollToEnd('smooth')">{{ unread }} 条新消息</button>
         <div class="channel-client-compose-status">
-          <div v-if="pendingAttachments.length > 0" class="channel-client-pending-files"><span v-for="attachment in pendingAttachments" :key="attachment.id" :class="`is-${attachment.status}`"><img v-if="attachment.kind === 'image' && attachment.fileUrl" :src="attachment.fileUrl" alt="" /><svg v-else viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6" /></svg><span><b :title="attachment.fileName">{{ attachment.fileName }}</b><small>{{ attachment.status === 'uploading' ? '上传中…' : attachment.status === 'failed' ? attachment.error : '已上传' }}</small></span><button v-if="attachment.status === 'failed'" type="button" :aria-label="`重试 ${attachment.fileName}`" @click="retryAttachment(attachment)">↻</button><button type="button" :aria-label="`移除 ${attachment.fileName}`" @click="removeAttachment(attachment.id)">×</button></span></div>
+          <div v-if="pendingAttachments.length > 0" class="channel-client-pending-files"><span v-for="attachment in pendingAttachments" :key="attachment.id" :class="`is-${attachment.status}`"><img v-if="attachment.kind === 'image' && attachment.fileUrl" :src="attachment.fileUrl" alt="" /><QiFile v-else :size="18" /><span><b :title="attachment.fileName">{{ attachment.fileName }}</b><small>{{ attachment.status === 'uploading' ? '上传中…' : attachment.status === 'failed' ? attachment.error : '已上传' }}</small></span><button v-if="attachment.status === 'failed'" type="button" :aria-label="`重试 ${attachment.fileName}`" @click="retryAttachment(attachment)"><QiRefresh2 :size="16" /></button><button type="button" :aria-label="`移除 ${attachment.fileName}`" @click="removeAttachment(attachment.id)"><QiCharMinus :size="16" /></button></span></div>
           <div v-if="sending" class="channel-client-send-state">正在发送…</div>
           <div v-if="error" class="channel-client-error">{{ error }}<button v-if="failedOutgoing.length > 0" type="button" @click="retry">重试</button></div>
         </div>
         <footer @dragover.prevent @drop.prevent="uploadFiles($event.dataTransfer?.files || null)">
-          <button type="button" aria-label="上传附件" :disabled="!teamAvailable || sending" @click="fileInput?.click()"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
+          <button type="button" aria-label="上传附件" :disabled="!teamAvailable || sending" @click="fileInput?.click()"><QiCharPlus :size="20" /></button>
           <input ref="fileInput" type="file" hidden multiple :accept="ACCEPT" @change="handleFileChange" />
-          <button type="button" class="channel-client-emoji-trigger" aria-label="插入表情" :disabled="!teamAvailable || sending" @click.stop="emojiOpen = !emojiOpen">☺</button>
+          <button type="button" class="channel-client-emoji-trigger" aria-label="插入表情" :disabled="!teamAvailable || sending" @click.stop="emojiOpen = !emojiOpen"><QiEmojiSmile :size="20" /></button>
           <div v-if="emojiOpen" class="channel-client-emoji-picker" role="dialog" aria-label="选择表情"><button v-for="emoji in EMOJIS" :key="emoji" type="button" :aria-label="`插入表情 ${emoji}`" @click="insertEmoji(emoji)">{{ emoji }}</button></div>
           <textarea ref="textarea" v-model="input" rows="1" :disabled="!teamAvailable || sending" :placeholder="teamAvailable ? copy.placeholder : (domainAllowed ? copy.unavailable : '当前网站未获授权，无法使用客服')" @paste="uploadFiles($event.clipboardData?.files || null)" @keydown.enter.exact="handleInputEnter"></textarea>
-          <button type="button" class="is-send" aria-label="发送消息" :disabled="!teamAvailable || sending || (!input.trim() && pendingAttachments.length === 0)" @click="send"><svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13" /></svg></button>
+          <button type="button" class="is-send" aria-label="发送消息" :disabled="!teamAvailable || sending || (!input.trim() && pendingAttachments.length === 0)" @click="send"><QiSendRight :size="20" /></button>
         </footer>
       </section>
       <button v-if="isWidget && !open" type="button" class="channel-client-fab" :style="{ background: channel.themeColor, color: themeForeground }" aria-label="打开聊天窗口" @click="toggleOpen"><WidgetGlyph :type="channel.widgetIcon" :custom-icon="channel.widgetCustomIcon" /><b v-if="unread">{{ unread > 99 ? '99+' : unread }}</b></button>
     </div>
   </main>
-  <main v-else class="channel-client-state"><strong>{{ copy.missingTitle }}</strong><span>{{ copy.missingDescription }}</span></main>
+  <main v-else class="channel-client-state"><strong>{{ deletedTeamLink ? '此聊天页面已停止服务' : copy.missingTitle }}</strong><span>{{ deletedTeamLink ? '接待团队已删除，历史会话仍会按保留规则归档。' : copy.missingDescription }}</span></main>
   <button v-if="zoomImage" type="button" class="channel-client-image-viewer" aria-label="关闭图片预览" @click="zoomImage = ''"><img :src="zoomImage" alt="图片预览" /></button>
 </template>
 

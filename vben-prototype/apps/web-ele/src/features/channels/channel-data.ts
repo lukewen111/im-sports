@@ -1,8 +1,10 @@
+import { DEFAULT_TEAM_ID, normalizeTeamId } from '../team/team-constants';
+
 export type ChannelType = 'chat-page' | 'telegram' | 'web-widget';
 export type WidgetPosition = 'bottom-left' | 'bottom-right';
 export type WidgetIcon = 'custom' | 'message' | 'message-dark' | 'message-line';
 
-export interface Team { accepting: boolean; avatar?: string; id: string; name: string; status: 'active' | 'invalid' }
+export interface Team { accepting: boolean; avatar?: string; color?: string; id: string; name: string; status: 'active' | 'invalid' }
 export interface Channel {
   allowedDomains: string[]; botToken?: string; brandAvatar?: string; brandName: string;
   brandSignature: string; chatPageUrl?: string; createdAt: string; enabled: boolean; id: string; installCode?: string;
@@ -12,7 +14,6 @@ export interface Channel {
   widgetMobilePosition: WidgetPosition; widgetMobileVisible: boolean; widgetOffsetX: number; widgetOffsetY: number;
   widgetPosition: WidgetPosition;
 }
-
 export const channelMeta: Record<ChannelType, { addLabel: string; description: string; label: string }> = {
   'web-widget': { addLabel: '添加网站', description: '在客户浏览网站时，与他们实时聊天。', label: '网站小部件' },
   telegram: { addLabel: '添加新连接', description: 'Telegram 消息会以会话形式进入你的收件箱。', label: 'Telegram' },
@@ -21,15 +22,15 @@ export const channelMeta: Record<ChannelType, { addLabel: string; description: s
 export const channelTypes: ChannelType[] = ['web-widget', 'telegram', 'chat-page'];
 export const languages = ['自动', '简体中文', '繁体中文', '英语', '越南语', '泰语', '高棉语', '缅甸语', '老挝语', '西班牙语'];
 export const teams: Team[] = [
-  { accepting: true, id: 'team-default', name: '通用团队', status: 'active' },
-  { accepting: true, id: 'team-sales', name: '售前服务团队', status: 'active' },
-  { accepting: false, id: 'team-after-sales', name: '售后服务团队', status: 'active' },
-  { accepting: false, id: 'team-invalid', name: '历史失效团队', status: 'invalid' },
+  { accepting: true, id: DEFAULT_TEAM_ID, name: '通用团队', status: 'active' },
+  { accepting: true, id: '100002', name: '售前服务团队', status: 'active' },
+  { accepting: false, id: '100003', name: '售后服务团队', status: 'active' },
+  { accepting: false, id: '199999', name: '历史失效团队', status: 'invalid' },
 ];
 
 const now = () => new Date().toISOString();
 const defaults = (type: ChannelType, id: string): Omit<Channel, 'createdAt' | 'id' | 'name' | 'type' | 'updatedAt'> => ({
-  allowedDomains: [], brandName: 'IM Support', brandSignature: '有问题？我们随时为您提供帮助。', enabled: true, teamId: 'team-default',
+  allowedDomains: [], brandName: 'IM Support', brandSignature: '有问题？我们随时为您提供帮助。', enabled: true, teamId: DEFAULT_TEAM_ID,
   installCode: type === 'web-widget' ? `<script src="https://cdn.example.com/widget.js" data-channel="${id}" async></script>` : undefined,
   installStatus: type === 'web-widget' ? 'unchecked' : undefined, language: '自动', soundEnabled: true, themeColor: '#1c1f26',
   widgetDesktopVisible: true, widgetIcon: 'message', widgetMobileOffsetX: 24, widgetMobileOffsetY: 24,
@@ -37,17 +38,27 @@ const defaults = (type: ChannelType, id: string): Omit<Channel, 'createdAt' | 'i
 });
 const seedChannels: Channel[] = [
   { ...defaults('web-widget', 'channel-web-widget-main'), createdAt: '2026-10-21T10:30:00.000Z', id: 'channel-web-widget-main', installCheckedAt: '2026-10-21T10:12:00.000Z', installStatus: 'success', name: '官网网站小部件', type: 'web-widget', updatedAt: now(), websiteDomain: 'support.example.com', widgetMobileOffsetX: 16, widgetMobileOffsetY: 16 },
-  { ...defaults('telegram', 'channel-telegram-payment'), botToken: '123456789:mock_telegram_payment_bot', createdAt: '2026-10-20T15:18:00.000Z', id: 'channel-telegram-payment', name: 'TG 充值渠道', teamId: 'team-sales', telegramBotId: '123456789', type: 'telegram', updatedAt: now() },
-  { ...defaults('chat-page', 'channel-chat-page-support'), brandSignature: '在线客户服务', chatPageUrl: '/chat/team-default', createdAt: '2026-10-19T09:42:00.000Z', id: 'channel-chat-page-support', name: '客户服务聊天页面', type: 'chat-page', updatedAt: now() },
+  { ...defaults('telegram', 'channel-telegram-payment'), botToken: '123456789:mock_telegram_payment_bot', createdAt: '2026-10-20T15:18:00.000Z', id: 'channel-telegram-payment', name: 'TG 充值渠道', teamId: '100002', telegramBotId: '123456789', type: 'telegram', updatedAt: now() },
+  { ...defaults('chat-page', 'channel-chat-page-support'), brandSignature: '在线客户服务', chatPageUrl: `/chat/${DEFAULT_TEAM_ID}`, createdAt: '2026-10-19T09:42:00.000Z', id: 'channel-chat-page-support', name: '客户服务聊天页面', type: 'chat-page', updatedAt: now() },
 ];
 export const STORAGE_KEY = 'im-support-vben:channels-v4';
 
 export function normalizeChannel(input: Partial<Channel> & { id: string; name: string; type: ChannelType }): Channel {
   const base = defaults(input.type, input.id);
-  return { ...base, createdAt: input.createdAt || now(), updatedAt: input.updatedAt || input.createdAt || now(), ...input, teamId: input.teamId || 'team-default' } as Channel;
+  const teamId = normalizeTeamId(input.teamId);
+  const value = { ...base, createdAt: input.createdAt || now(), updatedAt: input.updatedAt || input.createdAt || now(), ...input, teamId } as Channel;
+  if (value.type === 'chat-page') value.chatPageUrl = `/chat/${teamId}`;
+  return value;
 }
 export function loadChannels(): Channel[] {
-  try { const value = localStorage.getItem(STORAGE_KEY); if (value) return (JSON.parse(value) as Channel[]).map((item) => normalizeChannel(item)); } catch { /* use mock */ }
+  try {
+    const value = localStorage.getItem(STORAGE_KEY);
+    if (value) {
+      const channels = (JSON.parse(value) as Channel[]).map((item) => normalizeChannel(item));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
+      return channels;
+    }
+  } catch { /* use mock */ }
   return structuredClone(seedChannels);
 }
 export function persistChannels(channels: Channel[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(channels)); }

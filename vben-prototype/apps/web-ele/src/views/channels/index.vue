@@ -22,6 +22,7 @@ import {
   ElTableColumn,
   ElTag,
 } from 'element-plus';
+import { QiArrowLeft, QiCharPlus, QiSearch, QiSendRight } from 'qingicon-vue';
 
 import {
   channelMeta,
@@ -205,7 +206,7 @@ function saveDetail() {
         <template v-if="detail">
           <header class="content-header detail-title">
             <div>
-              <ElButton text circle aria-label="返回列表" @click="detail = undefined">←</ElButton>
+              <ElButton text circle aria-label="返回列表" @click="detail = undefined"><QiArrowLeft :size="18" /></ElButton>
               <ChannelGlyph :type="detail.type" />
               <h2>{{ detail.name }}</h2>
             </div>
@@ -249,7 +250,7 @@ function saveDetail() {
                 <div class="preview-chat">
                   <header :style="{ background: detail.themeColor }"><span>{{ detail.brandName.slice(0, 1) }}</span><div><strong>{{ detail.brandName }}</strong><small>{{ detail.brandSignature }}</small></div><button aria-label="关闭消息通知">♧</button><button aria-label="收起聊天窗口">—</button></header>
                   <main><p>您好，请问有什么可以帮您？</p><p class="is-customer" :style="{ background: detail.themeColor }">我想查询订单状态。</p></main>
-                  <footer><button class="attach-button">＋</button><span>输入您的消息...</span><button class="send-button" :style="{ background: detail.themeColor }">➤</button></footer>
+                  <footer><button class="attach-button"><QiCharPlus :size="18" /></button><span>输入您的消息...</span><button class="send-button" :style="{ background: detail.themeColor }"><QiSendRight :size="18" /></button></footer>
                 </div>
               </div>
             </aside>
@@ -268,9 +269,9 @@ function saveDetail() {
         </template>
 
         <template v-else>
-          <header class="content-header"><h2>{{ currentMeta?.label }}</h2><ElButton class="channel-add-button" type="primary" @click="openCreate()">＋ {{ currentMeta?.addLabel }}</ElButton></header>
+          <header class="content-header"><h2>{{ currentMeta?.label }}</h2><ElButton class="channel-add-button" type="primary" @click="openCreate()"><QiCharPlus :size="16" />{{ currentMeta?.addLabel }}</ElButton></header>
           <div class="list-area">
-            <ElInput v-model="query" clearable class="channel-search" placeholder="搜索渠道名称"><template #prefix><svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></svg></template></ElInput>
+            <ElInput v-model="query" clearable class="channel-search" placeholder="搜索渠道名称"><template #prefix><QiSearch class="search-icon" :size="16" /></template></ElInput>
             <ElTable :data="filteredChannels" class="channel-table" empty-text="暂无渠道">
               <ElTableColumn label="渠道名称" min-width="260"><template #default="scope"><button class="channel-name" @click="openDetail(scope.row)"><ChannelGlyph :type="scope.row.type" /><span><strong>{{ scope.row.name }}</strong><small v-if="scope.row.websiteDomain">{{ scope.row.websiteDomain }}</small></span></button></template></ElTableColumn>
               <ElTableColumn label="接待 AI Agent" prop="agent" min-width="170" />
