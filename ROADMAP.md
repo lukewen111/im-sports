@@ -94,6 +94,7 @@
 
 ## 最近验证
 
+- 2026-11-02：GitHub Pages 自动部署验证通过。仓库已切换为公开，`main` 推送触发的 Actions 在 Node 24 环境完成依赖安装、Vue 类型检查、生产构建、产物占位符／子路径校验和 Pages 发布；线上入口为 `https://lukewen111.github.io/im-sports/`。Playwright 在 2048 × 1045 视口实测渠道总览、全局「团队」入口和全部人员列表，页面标题、品牌 Logo、Hash 路由与静态资源均正常，浏览器控制台 0 错误，仅保留 Vben `StorageManager` 已知警告。
 - 2026-11-02：团队 V1.1 最终回归通过。目标文件 ESLint、Vue 类型检查、目标应用生产构建与 `git diff --check` 通过；Playwright 实测成员三级导航、Adam Bot／Webhook 双接入卡片、Webhook 配置字段、人类成员字段顺序与默认通用团队、团队纯数字 ID、详情编辑及未保存离开确认，浏览器控制台 0 错误，仅保留 Vben `StorageManager` 已知警告。生产构建产物更新至 `vben-prototype/apps/web-ele/dist` 及 `dist.zip`；演示服务启动于 `http://127.0.0.1:5786/` 并返回 HTTP 200。
 - 2026-11-02：团队 V1.1 PRD 结构校验通过：顶层章节严格为七个指定模块，共保留 46 条可逐项验证的验收规则；未出现「体验流畅」「操作便捷」等主观验收用语，章节交叉引用已按新编号更新，`git diff --check` 通过。
 
