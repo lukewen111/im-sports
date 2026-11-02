@@ -49,8 +49,20 @@ jobs:
 
       - name: Build production site
         env:
+          VITE_APP_NAMESPACE: im-support-demo
+          VITE_APP_TITLE: IM Support
           VITE_BASE: /im-sports/
+          VITE_GLOB_API_URL: https://mock-napi.vben.pro/api
+          VITE_ROUTER_HISTORY: hash
         run: pnpm -F @vben/web-ele exec vite build --mode production --base=/im-sports/
+
+      - name: Validate production artifact
+        run: |
+          if grep -q '%VITE_' apps/web-ele/dist/index.html; then
+            echo 'Unresolved Vite placeholder found in index.html'
+            exit 1
+          fi
+          grep -q '/im-sports/' apps/web-ele/dist/index.html
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
