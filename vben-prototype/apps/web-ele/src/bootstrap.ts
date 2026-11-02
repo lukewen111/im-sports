@@ -22,6 +22,8 @@ import './styles/im-support.css';
 import './styles/channel-source-parity.css';
 import './styles/team-module.css';
 
+const logoSource = `${import.meta.env.BASE_URL}im-support-logo.svg`;
+
 async function bootstrap(namespace: string) {
   // 锁定手动折叠行为，并覆盖历史本地偏好，避免一级栏展开时遮挡业务二级导航。
   updatePreferences({ sidebar: { expandOnHover: true } });
@@ -62,7 +64,7 @@ async function bootstrap(namespace: string) {
   accessStore.setAccessMenus(prototypeMenus);
   accessStore.setIsAccessChecked(true);
   userStore.setUserInfo({
-    avatar: '/im-support-logo.svg',
+    avatar: logoSource,
     realName: 'OP',
     roles: ['prototype'],
     userId: 'prototype-user',
