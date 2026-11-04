@@ -8,6 +8,7 @@ import { QiBell, QiBellOff, QiCharMinus, QiCharPlus, QiEmojiSmile, QiFile, QiRef
 
 import { foregroundForTheme } from '#/features/channels/channel-data';
 import { useChannelStore } from '#/features/channels/channel-store';
+import { useDemoServiceStore } from '#/features/service/demo-store';
 
 import WidgetGlyph from './WidgetGlyph.vue';
 
@@ -37,6 +38,7 @@ const CLIENT_COPY: Record<string, ClientCopy> = {
 
 const route = useRoute();
 const store = useChannelStore();
+const serviceStore = useDemoServiceStore();
 const isWidget = computed(() => route.name === 'ChannelWidget');
 const channel = computed<Channel | undefined>(() => isWidget.value
   ? store.channels.find((item) => item.id === String(route.params.channelId))
@@ -200,7 +202,18 @@ function sendMessages(outgoing: ClientMessage[]) {
   sending.value = true;
   window.setTimeout(() => {
     ensureActiveConversation();
-    outgoing.forEach((message) => append(message)); failedOutgoing.value = []; error.value = ''; sending.value = false;
+    outgoing.forEach((message) => {
+      append(message);
+      if (conversationMeta.value && channel.value) {
+        serviceStore.ingestCustomerMessage({
+          channelId: channel.value.id,
+          content: message.content || message.fileName || '附件',
+          identityId: identityId.value,
+          sessionId: conversationMeta.value.id,
+          teamId: conversationMeta.value.teamId,
+        });
+      }
+    }); failedOutgoing.value = []; error.value = ''; sending.value = false;
   }, 240);
   return true;
 }

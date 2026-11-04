@@ -10,7 +10,8 @@ import '@vben/styles/ele';
 import { useTitle } from '@vueuse/core';
 import { ElLoading } from 'element-plus';
 
-import { prototypeMenus } from '#/features/prototype-menu';
+import { buildPrototypeMenus } from '#/features/prototype-menu';
+import { usePrototypeAccess } from '#/features/team/access-store';
 import { $t, setupI18n } from '#/locales';
 
 import { initComponentAdapter } from './adapter/component';
@@ -60,15 +61,16 @@ async function bootstrap(namespace: string) {
   await initStores(app, { namespace });
 
   const accessStore = useAccessStore();
+  const prototypeAccess = usePrototypeAccess();
   const userStore = useUserStore();
-  accessStore.setAccessMenus(prototypeMenus);
+  watchEffect(() => accessStore.setAccessMenus(buildPrototypeMenus(prototypeAccess)));
   accessStore.setIsAccessChecked(true);
   userStore.setUserInfo({
     avatar: logoSource,
-    realName: 'OP',
+    realName: prototypeAccess.current?.name || 'OP',
     roles: ['prototype'],
     userId: 'prototype-user',
-    username: 'operator',
+    username: prototypeAccess.current?.account || 'operator',
   });
 
   // 安装权限指令

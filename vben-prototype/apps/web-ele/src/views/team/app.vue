@@ -36,12 +36,21 @@ import { useTeamStore } from '#/features/team/team-store';
 
 import MemberSelectionPanel from './MemberSelectionPanel.vue';
 import TeamMultiSelect from './TeamMultiSelect.vue';
+import RoleConfiguration from './RoleConfiguration.vue';
+import { usePrototypeAccess } from '#/features/team/access-store';
+import { normalizeRoleId, roleName, roleRecords } from '#/features/team/role-catalog';
+import { useRoleStore } from '#/features/team/role-store';
 
-type ViewKey = 'ai' | 'all' | 'human' | 'teams';
+type ViewKey = 'ai' | 'all' | 'human' | 'roles' | 'teams';
 
 const route = useRoute();
 const router = useRouter();
 const store = useTeamStore();
+const access = usePrototypeAccess();
+const roles = useRoleStore();
+const filterRoles = computed(() => roleRecords.value.filter((role) => access.isOwner || role.kind === 'member'));
+const manageableTeams = computed(() => access.visibleTeams);
+const canEditDetail = computed(() => access.isAdmin && access.permissions.teams && Boolean(detailTeam.value));
 const cloneValue = <T,>(value: T): T => structuredClone(toRaw(value));
 const channels = useChannelStore();
 
@@ -79,13 +88,14 @@ const aiFilters = reactive({ online: '', teamId: '' });
 const allFilters = reactive({ kind: '', online: '', role: '', teamId: '' });
 
 const currentView = computed<ViewKey>(() => {
+  if (route.path.includes('/roles')) return 'roles';
   if (route.path.includes('/members/ai')) return 'ai';
   if (route.path.includes('/members/human')) return 'human';
   if (route.path.includes('/teams')) return 'teams';
   return 'all';
 });
-const pageTitle = computed(() => ({ ai: 'AI 成员', all: '全部人员', human: '人类成员', teams: '团队' })[currentView.value]);
-const detailTeam = computed(() => currentView.value === 'teams' && typeof route.query.detail === 'string' ? store.teamById(route.query.detail) : undefined);
+const pageTitle = computed(() => ({ ai: 'AI 成员', all: '全部人员', human: '人类成员', roles: '角色配置', teams: '团队' })[currentView.value]);
+const detailTeam = computed(() => currentView.value === 'teams' && typeof route.query.detail === 'string' ? access.visibleTeams.find((team) => team.id === route.query.detail) : undefined);
 const detailMembers = computed(() => store.members.filter((member) => detailMemberIds.value.includes(member.id)));
 const detailDirty = computed(() => detailTeam.value ? JSON.stringify({ memberIds: detailMemberIds.value.toSorted(), name: detailName.value.trim() }) !== detailBaseline.value : false);
 const memberAvatarText = (member: Pick<TeamMember, 'account' | 'name'>) => avatarText(member.name, member.account);
@@ -96,20 +106,21 @@ const teamNames = (ids: string[]) => ids.map((id) => store.teamById(id)?.name).f
 const filteredRows = computed<Array<TeamMember | TeamRecord>>(() => {
   const query = keyword.value.trim().toLowerCase();
   if (currentView.value === 'teams') {
-    return store.teams.filter((team) => !query || `${team.name}${team.id}`.toLowerCase().includes(query));
+    return access.visibleTeams.filter((team) => !query || `${team.name}${team.id}`.toLowerCase().includes(query));
   }
   let source = store.members;
   if (currentView.value === 'human') source = store.humans;
   if (currentView.value === 'ai') source = store.aiMembers;
   return source.filter((member) => {
+    if (!access.visibleMembers.some((item) => item.id === member.id)) return false;
     const matchesQuery = !query || `${member.name}${member.account || ''}${member.id}`.toLowerCase().includes(query);
     let filters = !allFilters.teamId || member.teamIds.includes(allFilters.teamId);
     filters &&= !allFilters.kind || member.kind === allFilters.kind;
-    filters &&= !allFilters.role || member.role === allFilters.role;
+    filters &&= !allFilters.role || normalizeRoleId(member.role) === allFilters.role;
     filters &&= !allFilters.online || String(member.online) === allFilters.online;
     if (currentView.value === 'human') {
       filters = (!humanFilters.teamId || member.teamIds.includes(humanFilters.teamId))
-        && (!humanFilters.role || member.role === humanFilters.role)
+        && (!humanFilters.role || normalizeRoleId(member.role) === humanFilters.role)
         && (!humanFilters.online || String(member.online) === humanFilters.online)
         && (!humanFilters.enabled || String(Boolean(member.enabled)) === humanFilters.enabled);
     }
@@ -144,8 +155,13 @@ function createAiDraft(): MemberDraft {
 }
 
 function openMember(member?: TeamMember, kind: 'ai' | 'human' = 'human') {
+  if (!access.canManageMember(member, kind)) return ElMessage.warning('您没有此成员的管理权限。');
   editingOriginal.value = member ? cloneValue(member) : undefined;
   editing.value = member ? cloneValue(member) : (kind === 'ai' ? createAiDraft() : createHumanDraft());
+  if (editing.value.kind === 'human') {
+    editing.value.role = normalizeRoleId(editing.value.role);
+    if (!member) editing.value.teamIds = access.visibleTeams.some((team) => team.id === DEFAULT_TEAM_ID) ? [DEFAULT_TEAM_ID] : [];
+  }
   memberNameTouched.value = Boolean(member);
   memberAvatarTouched.value = Boolean(member);
   memberDrawer.value = true;
@@ -163,6 +179,10 @@ function chooseAgent(agentId: string) {
 
 async function saveMember() {
   if (!editing.value) return;
+  if (!access.canManageMember(editingOriginal.value, editing.value.kind)) return ElMessage.error('当前权限已变化，无法保存。');
+  if (editing.value.teamIds.some((id) => !access.visibleTeams.some((team) => team.id === id))) return ElMessage.error('不能选择无权管理的团队。');
+  if (editing.value.kind === 'human' && editing.value.role !== 'Owner' && !roles.assignable.some((role) => role.id === editing.value?.role)) return ElMessage.error('不能分配此角色。');
+  if (!access.isOwner && editing.value.id === access.currentId && (normalizeRoleId(editing.value.role) !== normalizeRoleId(access.current?.role || '') || JSON.stringify(editing.value.teamIds.toSorted()) !== JSON.stringify(access.current?.teamIds.toSorted()))) return ElMessage.error('不能修改自己的角色或团队归属。');
   if (editingOriginal.value?.kind === 'ai' && editingOriginal.value.online && !editing.value.online) {
     try {
       await ElMessageBox.confirm('下线后，该员工不再接待新会话，正在处理的会话将按团队规则重新分配。', '确认下线该 AI 员工？', { cancelButtonText: '取消', confirmButtonText: '确认下线', type: 'warning' });
@@ -180,6 +200,7 @@ function closeMemberDrawer() {
 }
 
 function startAddAi() {
+  if (!access.canManageMember(undefined, 'ai')) return ElMessage.warning('您没有创建 AI 成员的权限。');
   methodDialog.value = true;
 }
 
@@ -238,6 +259,7 @@ async function copyWebhookReplyUrl(memberId: string) {
 }
 
 function openAuthorization(purpose: 'create' | 'reauthorize') {
+  if (!access.isOwner) return ElMessage.warning('请联系 Owner 完成 Adam Bot 授权。');
   authorizationPurpose.value = purpose;
   authorizationFrameLoaded.value = false;
   authorizationFrameFailed.value = false;
@@ -254,6 +276,7 @@ function startAuthorizationLoadTimer() {
 }
 
 function completeAuthorizationFromLogin() {
+  if (!access.isOwner) return;
   if (authorizationFrameLoaded.value) return;
   if (authorizationLoadTimer) window.clearTimeout(authorizationLoadTimer);
   const tenantId = authorizationPurpose.value === 'reauthorize' && store.authorization.tenantId
@@ -289,6 +312,7 @@ onBeforeUnmount(() => {
 });
 
 async function unbindAdamBot() {
+  if (!access.isOwner) return ElMessage.warning('仅 Owner 可以解除绑定。');
   const affected = store.aiMembers.filter((member) => member.aiSource !== 'webhook' && member.agentId).length;
   try {
     await ElMessageBox.confirm(
@@ -302,6 +326,7 @@ async function unbindAdamBot() {
 }
 
 function openTeam() {
+  if (!access.isAdmin || !access.permissions.teams || access.permissions.teamScope !== 'all') return ElMessage.warning('您没有创建团队的权限。');
   const id = store.allocateTeamId();
   editingTeam.value = { color: avatarColor(id), id, name: '', updatedAt: '', version: 0 };
   teamMemberIds.value = [];
@@ -309,6 +334,7 @@ function openTeam() {
 }
 
 function saveTeam() {
+  if (!access.isAdmin || !access.permissions.teams || access.permissions.teamScope !== 'all') return ElMessage.error('当前权限已变化，无法创建团队。');
   if (!editingTeam.value) return;
   const result = store.saveTeam(editingTeam.value, teamMemberIds.value);
   if (result.error) return ElMessage.error(result.error);
@@ -325,6 +351,7 @@ function closeTeamDetail() {
 }
 
 function openMemberPicker(team: TeamRecord) {
+  if (!access.isAdmin || !access.permissions.teams) return;
   editingTeam.value = cloneValue(team);
   pickerMemberIds.value = [...detailMemberIds.value];
   memberPickerDialog.value = true;
@@ -336,6 +363,7 @@ function savePickedMembers() {
 }
 
 async function removeFromTeam(member: TeamMember) {
+  if (!access.isAdmin || !access.permissions.teams) return;
   const nextMemberIds = detailMemberIds.value.filter((id) => id !== member.id);
   if (!detailTeam.value) return;
   if (detailMemberIds.value.length === 1) return ElMessage.error(`无法完成操作。「${detailTeam.value.name}」团队至少需要保留一名成员。`);
@@ -354,6 +382,7 @@ function resetDetailDraft() {
 
 function saveTeamDetail() {
   if (!detailTeam.value) return;
+  if (!access.isAdmin || !access.permissions.teams || !access.visibleTeams.some((team) => team.id === detailTeam.value?.id)) return ElMessage.error('您没有此团队的管理权限。');
   const result = store.saveTeam({ ...cloneValue(detailTeam.value), name: detailName.value }, detailMemberIds.value);
   if (result.error) return ElMessage.error(result.error);
   detailBaseline.value = JSON.stringify({ memberIds: detailMemberIds.value.toSorted(), name: detailName.value.trim() });
@@ -361,6 +390,7 @@ function saveTeamDetail() {
 }
 
 async function deleteMember(member: TeamMember) {
+  if (!access.canManageMember(member)) return ElMessage.warning('您没有此成员的管理权限。');
   try {
     await ElMessageBox.confirm('删除后该成员将停止接待，历史会话和原接待记录仍会保留。', `确认删除「${member.name}」？`, { cancelButtonText: '取消', confirmButtonText: '确认删除', type: 'warning' });
     const result = store.removeMember(member.id);
@@ -370,12 +400,14 @@ async function deleteMember(member: TeamMember) {
 }
 
 async function toggleHuman(member: TeamMember, enabled: boolean) {
+  if (!access.canManageMember(member)) return ElMessage.warning('您没有此成员的管理权限。');
   const result = store.toggleHumanEnabled(member.id, enabled);
   if (result.error) return ElMessage.error(result.error);
   ElMessage.success(enabled ? '账号已启用，不会自动上线' : '账号已停用并退出登录');
 }
 
 async function toggleAi(member: TeamMember) {
+  if (!access.canManageMember(member)) return ElMessage.warning('您没有此成员的管理权限。');
   if (member.online) {
     try {
       await ElMessageBox.confirm('下线后，该员工不再接待新会话，正在处理的会话将按团队规则重新分配。', '确认下线该 AI 员工？', { cancelButtonText: '取消', confirmButtonText: '确认下线', type: 'warning' });
@@ -387,6 +419,7 @@ async function toggleAi(member: TeamMember) {
 }
 
 function openReset(member: TeamMember) {
+  if (!access.isOwner) return ElMessage.warning('仅 Owner 可以重置成员密码。');
   resetTarget.value = member;
   resetForm.password = '';
   resetForm.confirmPassword = '';
@@ -394,6 +427,7 @@ function openReset(member: TeamMember) {
 }
 
 function resetPassword() {
+  if (!access.isOwner) return ElMessage.error('当前权限已变化。');
   if (!resetTarget.value) return;
   const result = store.resetPassword(resetTarget.value.id, resetForm.password, resetForm.confirmPassword);
   if (result.error) return ElMessage.error(result.error);
@@ -402,6 +436,7 @@ function resetPassword() {
 }
 
 async function deleteTeam(team: TeamRecord) {
+  if (!access.isAdmin || !access.permissions.teams || !access.visibleTeams.some((item) => item.id === team.id)) return ElMessage.warning('您没有此团队的管理权限。');
   const check = store.canRemoveTeam(team.id);
   if (check.error) return ElMessage.error(check.error);
   try {
@@ -444,29 +479,31 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
   <div class="team-workspace">
     <aside class="team-secondary-nav" aria-label="团队功能导航">
       <h2>团队</h2>
-      <button type="button" class="secondary-nav-group" :aria-expanded="memberNavExpanded" @click="toggleMemberNav">
+      <button v-if="access.permissions.humans || access.permissions.ai" type="button" class="secondary-nav-group" :aria-expanded="memberNavExpanded" @click="toggleMemberNav">
         <span>成员</span><QiChevronUp v-if="memberNavExpanded" class="secondary-nav-chevron" :size="16" aria-hidden="true" /><QiChevronDown v-else class="secondary-nav-chevron" :size="16" aria-hidden="true" />
       </button>
       <div v-show="memberNavExpanded" class="secondary-nav-children">
-        <button type="button" :class="{ active: currentView === 'all' }" @click="navigateTo('/team/members/all')"><span>全部人员</span><small>{{ store.members.length }}</small></button>
-        <button type="button" :class="{ active: currentView === 'ai' }" @click="navigateTo('/team/members/ai')"><span>AI 成员</span><small>{{ store.aiMembers.length }}</small></button>
-        <button type="button" :class="{ active: currentView === 'human' }" @click="navigateTo('/team/members/human')"><span>人类成员</span><small>{{ store.humans.length }}</small></button>
+        <button v-if="access.permissions.humans || access.permissions.ai" type="button" :class="{ active: currentView === 'all' }" @click="navigateTo('/team/members/all')"><span>全部人员</span><small>{{ access.visibleMembers.length }}</small></button>
+        <button v-if="access.permissions.ai" type="button" :class="{ active: currentView === 'ai' }" @click="navigateTo('/team/members/ai')"><span>AI 成员</span><small>{{ access.visibleMembers.filter((member) => member.kind === 'ai').length }}</small></button>
+        <button v-if="access.permissions.humans" type="button" :class="{ active: currentView === 'human' }" @click="navigateTo('/team/members/human')"><span>人类成员</span><small>{{ access.visibleMembers.filter((member) => member.kind === 'human').length }}</small></button>
       </div>
-      <button type="button" class="secondary-nav-item" :class="{ active: currentView === 'teams' }" @click="navigateTo('/team/teams')"><span>团队</span><small>{{ store.teams.length }}</small></button>
+      <button v-if="access.permissions.teams" type="button" class="secondary-nav-item" :class="{ active: currentView === 'teams' }" @click="navigateTo('/team/teams')"><span>团队</span><small>{{ access.visibleTeams.length }}</small></button>
+      <button v-if="access.canManageRoles" type="button" class="secondary-nav-item" :class="{ active: currentView === 'roles' }" @click="navigateTo('/team/roles')"><span>角色配置</span></button>
     </aside>
     <main class="team-page">
-    <template v-if="detailTeam">
+    <RoleConfiguration v-if="currentView === 'roles'" />
+    <template v-else-if="detailTeam">
       <header class="team-page-header detail-header">
         <ElButton text class="back-button" @click="closeTeamDetail"><QiArrowLeft :size="16" />返回</ElButton>
       </header>
       <section class="team-detail">
         <div class="team-identity">
           <span class="team-square large" :style="{ background: detailTeam.color }">{{ teamAvatarText(detailTeam) }}</span>
-          <label><span>团队名称</span><ElInput v-model="detailName" maxlength="32" show-word-limit :disabled="detailTeam.system" /></label>
+          <label><span>团队名称</span><ElInput v-model="detailName" maxlength="32" show-word-limit :disabled="detailTeam.system || !canEditDetail" /></label>
         </div>
         <div class="section-heading">
           <h2>{{ detailMembers.length }} 名成员</h2>
-          <ElButton type="primary" @click="openMemberPicker(detailTeam)"><QiCharPlus :size="16" />添加成员</ElButton>
+          <ElButton v-if="canEditDetail" type="primary" @click="openMemberPicker(detailTeam)"><QiCharPlus :size="16" />添加成员</ElButton>
         </div>
         <ElInput v-model="keyword" clearable placeholder="搜索团队成员" class="team-search" />
         <ElTable :data="detailMembers.filter((member) => `${member.name}${member.account || member.id}`.toLowerCase().includes(keyword.toLowerCase()))" empty-text="未找到符合条件的成员">
@@ -475,7 +512,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
           </ElTableColumn>
           <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="type-tag" :class="scope.row.kind">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
           <ElTableColumn label="在线状态" min-width="130"><template #default="scope"><span class="online" :class="{ off: !scope.row.online }">● {{ scope.row.online ? '在线' : '离线' }}</span></template></ElTableColumn>
-          <ElTableColumn label="操作" width="100"><template #default="scope"><ElTooltip content="移除成员" placement="top"><ElButton text type="danger" class="member-remove-button" :aria-label="`移除 ${scope.row.name}`" @click="removeFromTeam(scope.row)"><QiDeleteTrash :size="17" /></ElButton></ElTooltip></template></ElTableColumn>
+          <ElTableColumn v-if="canEditDetail" label="操作" width="100"><template #default="scope"><ElTooltip content="移除成员" placement="top"><ElButton text type="danger" class="member-remove-button" :aria-label="`移除 ${scope.row.name}`" @click="removeFromTeam(scope.row)"><QiDeleteTrash :size="17" /></ElButton></ElTooltip></template></ElTableColumn>
         </ElTable>
         <footer v-if="detailDirty" class="detail-action-bar"><ElButton @click="resetDetailDraft">取消</ElButton><ElButton type="primary" @click="saveTeamDetail">保存</ElButton></footer>
       </section>
@@ -484,11 +521,11 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
     <template v-else>
       <header class="team-page-header">
         <h1>{{ pageTitle }}</h1>
-        <ElDropdown v-if="currentView !== 'teams'" trigger="click" @command="addMember">
+        <ElDropdown v-if="currentView !== 'teams' && access.isAdmin && (access.permissions.humans || access.permissions.ai)" trigger="click" @command="addMember">
           <ElButton type="primary"><QiCharPlus :size="16" />添加成员<QiChevronDown :size="14" /></ElButton>
-          <template #dropdown><ElDropdownMenu><ElDropdownItem command="human">人类成员</ElDropdownItem><ElDropdownItem command="ai">AI 成员</ElDropdownItem></ElDropdownMenu></template>
+          <template #dropdown><ElDropdownMenu><ElDropdownItem v-if="access.permissions.humans" command="human">人类成员</ElDropdownItem><ElDropdownItem v-if="access.permissions.ai" command="ai">AI 成员</ElDropdownItem></ElDropdownMenu></template>
         </ElDropdown>
-        <ElButton v-else type="primary" @click="openTeam()"><QiCharPlus :size="16" />新建团队</ElButton>
+        <ElButton v-else-if="currentView === 'teams' && access.isAdmin && access.permissions.teams && access.permissions.teamScope === 'all'" type="primary" @click="openTeam()"><QiCharPlus :size="16" />新建团队</ElButton>
       </header>
 
       <section class="team-content">
@@ -496,7 +533,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
           <ElInput v-model="keyword" clearable :placeholder="currentView === 'teams' ? '搜索团队' : '搜索成员名称、账号或 ID'" class="team-search" />
           <template v-if="currentView === 'human'">
             <ElSelect v-model="humanFilters.teamId" clearable placeholder="团队"><ElOption v-for="team in store.teams" :key="team.id" :label="team.name" :value="team.id" /></ElSelect>
-            <ElSelect v-model="humanFilters.role" clearable placeholder="角色"><ElOption v-for="role in ['Owner', '管理员', '客服']" :key="role" :label="role" :value="role" /></ElSelect>
+            <ElSelect v-model="humanFilters.role" clearable placeholder="角色"><ElOption v-if="access.isOwner" label="Owner" value="Owner" /><ElOption v-for="role in filterRoles" :key="role.id" :label="role.name" :value="role.id" /></ElSelect>
             <ElSelect v-model="humanFilters.online" clearable placeholder="在线状态"><ElOption label="在线" value="true" /><ElOption label="离线" value="false" /></ElSelect>
             <ElSelect v-model="humanFilters.enabled" clearable placeholder="启用状态"><ElOption label="启用" value="true" /><ElOption label="停用" value="false" /></ElSelect>
           </template>
@@ -507,7 +544,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
           <template v-else-if="currentView === 'all'">
             <ElSelect v-model="allFilters.teamId" clearable placeholder="所属团队"><ElOption v-for="team in store.teams" :key="team.id" :label="team.name" :value="team.id" /></ElSelect>
             <ElSelect v-model="allFilters.kind" clearable placeholder="成员类型"><ElOption label="人类成员" value="human" /><ElOption label="AI 成员" value="ai" /></ElSelect>
-            <ElSelect v-model="allFilters.role" clearable placeholder="角色"><ElOption v-for="role in ['Owner', '管理员', '客服', 'AI 成员']" :key="role" :label="role" :value="role" /></ElSelect>
+            <ElSelect v-model="allFilters.role" clearable placeholder="角色"><ElOption v-if="access.isOwner" label="Owner" value="Owner" /><ElOption label="AI 成员" value="AI 成员" /><ElOption v-for="role in filterRoles" :key="role.id" :label="role.name" :value="role.id" /></ElSelect>
             <ElSelect v-model="allFilters.online" clearable placeholder="在线状态"><ElOption label="在线" value="true" /><ElOption label="离线" value="false" /></ElSelect>
           </template>
           <ElButton v-if="currentView !== 'teams'" text @click="clearFilters">清除筛选</ElButton>
@@ -515,22 +552,22 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
 
         <ElTable v-if="currentView !== 'teams'" :data="pagedRows" :empty-text="keyword ? '未找到符合条件的成员' : (currentView === 'ai' ? '暂无 AI 成员' : (currentView === 'human' ? '暂无人类成员' : '暂无成员'))">
           <ElTableColumn label="昵称" min-width="260"><template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.name }}</b><small>{{ scope.row.id }}</small></span></span></template></ElTableColumn>
-          <ElTableColumn label="角色" prop="role" min-width="120" />
+          <ElTableColumn label="角色" min-width="120"><template #default="scope">{{ roleName(scope.row.role) }}</template></ElTableColumn>
           <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="type-tag" :class="scope.row.kind">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
           <ElTableColumn label="团队" min-width="220"><template #default="scope">{{ teamNames(scope.row.teamIds) }}</template></ElTableColumn>
           <ElTableColumn label="在线状态" min-width="190">
             <template #default="scope">
               <span class="online" :class="{ off: !scope.row.online }">● {{ scope.row.online ? '在线' : '离线' }}</span>
-              <button v-if="scope.row.kind === 'ai'" type="button" class="status-action" :aria-label="scope.row.online ? `下线 ${scope.row.name}` : `上线 ${scope.row.name}`" :disabled="scope.row.exception === 'agent'" @click="toggleAi(scope.row)">{{ scope.row.online ? '↓' : '↑' }}</button>
+              <button v-if="scope.row.kind === 'ai' && access.canManageMember(scope.row)" type="button" class="status-action" :aria-label="scope.row.online ? `下线 ${scope.row.name}` : `上线 ${scope.row.name}`" :disabled="scope.row.exception === 'agent'" @click="toggleAi(scope.row)">{{ scope.row.online ? '↓' : '↑' }}</button>
               <span v-if="scope.row.exception" class="exception">⚠ {{ scope.row.exception === 'connection' ? '连接异常' : scope.row.exception === 'authorization' ? '授权异常' : 'Agent 已失效' }}</span>
             </template>
           </ElTableColumn>
-          <ElTableColumn label="启用" width="100"><template #default="scope"><ElSwitch v-if="scope.row.kind === 'human'" :model-value="scope.row.enabled" @change="(value) => toggleHuman(scope.row, Boolean(value))" /><span v-else>—</span></template></ElTableColumn>
+          <ElTableColumn label="启用" width="100"><template #default="scope"><ElSwitch v-if="scope.row.kind === 'human'" :model-value="scope.row.enabled" :disabled="!access.canManageMember(scope.row)" @change="(value) => toggleHuman(scope.row, Boolean(value))" /><span v-else>—</span></template></ElTableColumn>
           <ElTableColumn label="操作" width="100">
             <template #default="scope">
-              <ElDropdown trigger="click">
+              <ElDropdown v-if="access.canManageMember(scope.row)" trigger="click">
                 <ElButton text type="primary" :aria-label="`${scope.row.name} 的更多操作`"><QiMore :size="20" /></ElButton>
-                <template #dropdown><ElDropdownMenu><ElDropdownItem @click="openMember(scope.row, scope.row.kind)">编辑</ElDropdownItem><ElDropdownItem v-if="scope.row.kind === 'human'" @click="openReset(scope.row)">重置密码</ElDropdownItem><ElDropdownItem v-if="!scope.row.protected" divided @click="deleteMember(scope.row)">删除</ElDropdownItem></ElDropdownMenu></template>
+                <template #dropdown><ElDropdownMenu><ElDropdownItem @click="openMember(scope.row, scope.row.kind)">编辑</ElDropdownItem><ElDropdownItem v-if="scope.row.kind === 'human' && access.isOwner" @click="openReset(scope.row)">重置密码</ElDropdownItem><ElDropdownItem v-if="!scope.row.protected" divided @click="deleteMember(scope.row)">删除</ElDropdownItem></ElDropdownMenu></template>
               </ElDropdown>
             </template>
           </ElTableColumn>
@@ -595,15 +632,15 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
           <ElFormItem label="账号" required><ElInput v-model="editing.account" :disabled="Boolean(editingOriginal)" placeholder="请输入登录账号" /></ElFormItem>
           <ElFormItem label="昵称" required><ElInput v-model="editing.name" maxlength="32" show-word-limit @input="memberNameTouched = true" /></ElFormItem>
           <template v-if="!editingOriginal"><ElFormItem label="初始密码" required><ElInput v-model="editing.password" type="password" show-password placeholder="至少 8 位，包含字母和数字" /></ElFormItem><ElFormItem label="确认初始密码" required><ElInput v-model="editing.confirmPassword" type="password" show-password /></ElFormItem></template>
-          <ElFormItem label="角色" required><ElSelect v-model="editing.role" placeholder="请选择角色"><ElOption v-for="role in ['Owner', '管理员', '客服']" :key="role" :label="role" :value="role" /></ElSelect></ElFormItem>
-          <ElFormItem label="团队" required><TeamMultiSelect v-model="editing.teamIds" :teams="store.teams" /></ElFormItem>
+          <ElFormItem label="角色" required><ElSelect v-model="editing.role" placeholder="请选择角色" :disabled="editing.role === 'Owner' || (!access.isOwner && editing.id === access.currentId)"><ElOption v-if="editing.role === 'Owner'" label="Owner" value="Owner" /><ElOption v-for="role in roles.assignable" :key="role.id" :label="role.name" :value="role.id" /></ElSelect></ElFormItem>
+          <ElFormItem label="团队" required><TeamMultiSelect v-model="editing.teamIds" :teams="manageableTeams" /></ElFormItem>
           <ElFormItem label="时区"><ElSelect v-model="editing.timezone"><ElOption label="UTC+08:00 北京时间" value="UTC+08:00" /><ElOption label="UTC+00:00 协调世界时" value="UTC+00:00" /><ElOption label="UTC-05:00 北美东部时间" value="UTC-05:00" /></ElSelect></ElFormItem>
           <ElFormItem label="用户状态"><ElSwitch v-model="editing.enabled" active-text="启用" inactive-text="停用" /></ElFormItem>
         </template>
         <template v-else>
           <template v-if="editing.aiSource !== 'webhook'"><ElFormItem label="AI Agent" required><div class="agent-field"><ElSelect :model-value="editing.agentId" :disabled="!store.canUseAgentCatalog || store.agentListState !== 'ready'" placeholder="选择已发布 AI Agent" @change="chooseAgent"><ElOption v-for="agent in store.publishedAgents" :key="agent.id" :label="agent.name" :value="agent.id" /></ElSelect><ElButton v-if="store.agentListState === 'error'" text type="primary" @click="store.agentListState = 'ready'">AI Agent 列表加载失败，请重试</ElButton><span v-else-if="store.publishedAgents.length === 0" class="field-error">暂无已发布的 AI Agent，请先在 Adam Bot 发布。</span><span v-else-if="!store.canUseAgentCatalog" class="form-help">未绑定 Adam Bot，原 AI Agent 保持为空。</span></div></ElFormItem></template>
           <ElFormItem label="昵称" required><ElInput v-model="editing.name" maxlength="32" show-word-limit @input="memberNameTouched = true" /></ElFormItem>
-          <ElFormItem label="团队" required><TeamMultiSelect v-model="editing.teamIds" :disabled-ids="disabledTeamIdsForMember" :teams="store.teams" /></ElFormItem>
+          <ElFormItem label="团队" required><TeamMultiSelect v-model="editing.teamIds" :disabled-ids="disabledTeamIdsForMember" :teams="manageableTeams" /></ElFormItem>
           <ElFormItem label="在线状态"><ElSwitch v-model="editing.online" active-text="在线" inactive-text="离线" /></ElFormItem>
           <template v-if="editing.aiSource === 'webhook'"><ElFormItem label="消息接收地址" required><ElInput v-model="editing.webhookUrl" placeholder="https://example.com/webhook/messages" /><span class="form-help">客户发送给该 AI 员工的消息将推送至此地址。</span></ElFormItem><ElFormItem label="消息回复地址"><div class="readonly-copy-field"><ElInput :model-value="webhookReplyUrl(editing.id)" disabled /><ElTooltip content="复制消息回复地址" placement="top"><ElButton text aria-label="复制消息回复地址" class="copy-field-button" @click="copyWebhookReplyUrl(editing.id)"><QiCopy :size="18" /></ElButton></ElTooltip></div></ElFormItem><ElFormItem label="AccessToken"><ElInput :model-value="editing.webhookToken" readonly /></ElFormItem></template>
         </template>

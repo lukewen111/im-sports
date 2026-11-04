@@ -9,6 +9,7 @@ import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
+import { usePrototypeAccess } from '#/features/team/access-store';
 
 /**
  * 通用守卫配置
@@ -46,10 +47,12 @@ function setupCommonGuard(router: Router) {
  */
 function setupAccessGuard(router: Router) {
   router.beforeEach(async (to, from) => {
+    const prototypeAccess = usePrototypeAccess();
     const accessStore = useAccessStore();
     const userStore = useUserStore();
     const authStore = useAuthStore();
 
+    if (!prototypeAccess.canVisit(to.path)) return { path: prototypeAccess.home, replace: true };
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {

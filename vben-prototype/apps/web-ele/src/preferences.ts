@@ -10,7 +10,7 @@ const logoSource = `${import.meta.env.BASE_URL}im-support-logo.svg`;
 export const overridesPreferences = defineOverridesPreferences({
   app: {
     contentPadding: 0,
-    defaultHomePath: '/channels',
+    defaultHomePath: '/inbox',
     enableCheckUpdates: false,
     enablePreferences: false,
     layout: 'sidebar-nav',

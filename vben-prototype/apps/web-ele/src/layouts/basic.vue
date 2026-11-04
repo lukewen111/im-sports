@@ -5,7 +5,6 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
-import { VBEN_DOC_URL, VBEN_GITHUB_URL } from '@vben/constants';
 import { useWatermark } from '@vben/hooks';
 import {
   BasicLayout,
@@ -15,64 +14,31 @@ import {
 } from '@vben/layouts';
 import { preferences, usePreferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
-import { openWindow } from '@vben/utils';
 
-import { QiBookOpenText, QiLink, QiQuestion, QiUser } from 'qingicon-vue';
+import { QiUser } from 'qingicon-vue';
 
-import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
+import { usePrototypeAccess } from '#/features/team/access-store';
 
 const notifications = ref<NotificationItem[]>([
   {
     id: 1,
-    avatar: 'https://avatar.vercel.sh/vercel.svg?text=VB',
-    date: '3小时前',
-    isRead: true,
-    message: '描述信息描述信息描述信息',
-    title: '收到了 14 份新周报',
+    avatar: preferences.app.defaultAvatar,
+    date: '刚刚',
+    isRead: false,
+    message: '客户“王女士”发送了一条新消息。',
+    title: '新客户消息',
+    link: '/inbox?session=session-20261104001',
   },
   {
     id: 2,
-    avatar: 'https://avatar.vercel.sh/1',
-    date: '刚刚',
+    avatar: preferences.app.defaultAvatar,
+    date: '2分钟前',
     isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '朱偏右 回复了你',
-  },
-  {
-    id: 3,
-    avatar: 'https://avatar.vercel.sh/1',
-    date: '2024-01-01',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '曲丽丽 评论了你',
-  },
-  {
-    id: 4,
-    avatar: 'https://avatar.vercel.sh/satori',
-    date: '1天前',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '代办提醒',
-  },
-  {
-    id: 5,
-    avatar: 'https://avatar.vercel.sh/satori',
-    date: '1天前',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '跳转Workspace示例',
-    link: '/workspace',
-  },
-  {
-    id: 6,
-    avatar: 'https://avatar.vercel.sh/satori',
-    date: '1天前',
-    isRead: false,
-    message: '描述信息描述信息描述信息',
-    title: '跳转外部链接示例',
-    link: 'https://doc.vben.pro',
+    message: '有一条网站小部件会话等待接管。',
+    title: '待分配会话',
+    link: '/inbox?session=session-20261104002',
   },
 ]);
 
@@ -80,6 +46,7 @@ const router = useRouter();
 const userStore = useUserStore();
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
+const prototypeAccess = usePrototypeAccess();
 const { destroyWatermark, updateWatermark } = useWatermark();
 const { isDark } = usePreferences();
 const showDot = computed(() =>
@@ -89,37 +56,10 @@ const showDot = computed(() =>
 const menus = computed(() => [
   {
     handler: () => {
-      router.push({ name: 'Profile' });
+      router.push('/personal');
     },
     icon: QiUser,
-    text: $t('page.auth.profile'),
-  },
-  {
-    handler: () => {
-      openWindow(VBEN_DOC_URL, {
-        target: '_blank',
-      });
-    },
-    icon: QiBookOpenText,
-    text: $t('ui.widgets.document'),
-  },
-  {
-    handler: () => {
-      openWindow(VBEN_GITHUB_URL, {
-        target: '_blank',
-      });
-    },
-    icon: QiLink,
-    text: 'GitHub',
-  },
-  {
-    handler: () => {
-      openWindow(`${VBEN_GITHUB_URL}/issues`, {
-        target: '_blank',
-      });
-    },
-    icon: QiQuestion,
-    text: $t('ui.widgets.qa'),
+    text: '个人中心',
   },
 ]);
 
@@ -150,7 +90,7 @@ function handleMakeAll() {
   notifications.value.forEach((item) => (item.isRead = true));
 }
 
-const viewAll = () => {};
+const viewAll = () => router.push('/inbox');
 
 const handleClick = (item: NotificationItem) => {
   // 如果通知项有链接，点击时跳转
@@ -223,9 +163,8 @@ watch(
       <UserDropdown
         :avatar
         :menus
-        :text="userStore.userInfo?.realName"
-        description="ann.vben@gmail.com"
-        tag-text="Pro"
+        :text="prototypeAccess.current?.name || userStore.userInfo?.realName"
+        :description="prototypeAccess.current?.account || ''"
         @logout="handleLogout"
         @clear-preferences-and-logout="handleLogout"
       />

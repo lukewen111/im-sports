@@ -3,7 +3,7 @@ import type { RouteRecordRaw } from 'vue-router';
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 
-import { QiAppsSquare, QiRobot, QiUser, QiUserGroup } from 'qingicon-vue';
+import { QiAppsSquare, QiMessageSquareAi, QiPersonalization, QiRobot, QiUser, QiUserGroup } from 'qingicon-vue';
 
 import { $t } from '#/locales';
 
@@ -51,12 +51,20 @@ const coreRoutes: RouteRecordRaw[] = [
     path: '/',
     redirect: preferences.app.defaultHomePath,
     children: [
+      { name: 'Inbox', path: 'inbox', component: () => import('#/views/inbox/app.vue'), meta: { icon: QiMessageSquareAi, title: '聊天' } },
+      { name: 'Customers', path: 'customers', component: () => import('#/views/customers/app.vue'), meta: { icon: QiUser, title: '客户' } },
       {
         name: 'Team',
         path: 'team',
         redirect: '/team/members/all',
         meta: { icon: QiUserGroup, title: '团队' },
         children: [
+          {
+            name: 'TeamRoles',
+            path: 'roles',
+            component: () => import('#/views/team/app.vue'),
+            meta: { icon: QiUserGroup, title: '角色配置' },
+          },
           {
             name: 'TeamMembers',
             path: 'members',
@@ -101,6 +109,8 @@ const coreRoutes: RouteRecordRaw[] = [
           title: '渠道管理',
         },
       },
+      { name: 'Reception', path: 'reception', component: () => import('#/views/reception/app.vue'), meta: { icon: QiPersonalization, title: '聊天与接待' } },
+      { name: 'Personal', path: 'personal', component: () => import('#/views/personal/app.vue'), meta: { hideInMenu: true, icon: QiUser, title: '个人中心' } },
     ],
   },
   {

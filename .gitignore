@@ -1,5 +1,6 @@
 node_modules/
 dist/
+vben-prototype/.tmp/
 .playwright-cli/
 *.tsbuildinfo
 vite.config.js
@@ -12,4 +13,7 @@ Thumbs.db
 .vscode/
 .codex/
 .agents/
+build/
+*.local
+output/
 

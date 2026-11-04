@@ -3,11 +3,12 @@ import { computed, ref, toRaw, watch } from 'vue';
 import { defineStore } from 'pinia';
 
 import { avatarColor, DEFAULT_TEAM_ID, nextTeamId, normalizeTeamId } from './team-constants';
+import { findRole, normalizeRoleId } from './role-catalog';
 
 export type AgentHealth = 'available' | 'deleted' | 'unavailable';
 export type AuthorizationStatus = 'expired' | 'none' | 'valid';
 export type MemberKind = 'ai' | 'human';
-export type MemberRole = '' | 'AI 成员' | 'Owner' | '客服' | '管理员';
+export type MemberRole = string;
 
 export interface AgentOption {
   avatar?: string;
@@ -205,7 +206,8 @@ export const useTeamStore = defineStore('im-support-team', () => {
     if (!draft.account?.trim() || !/^[\w.+@-]{3,64}$/.test(draft.account.trim())) return { error: '请输入有效登录账号。' };
     if (members.value.some((member) => member.kind === 'human' && member.id !== draft.id && member.account?.toLowerCase() === draft.account?.trim().toLowerCase())) return { error: '该账号已存在，请更换账号。' };
     if (!draft.name.trim()) return { error: '请输入昵称。' };
-    if (!['Owner', '客服', '管理员'].includes(draft.role)) return { error: '请选择有效角色。' };
+    if (draft.role === 'Owner' ? previous?.role !== 'Owner' : !findRole(draft.role)) return { error: '请选择有效角色，不能创建第二个 Owner。' };
+    if (previous?.role === 'Owner' && draft.role !== 'Owner') return { error: 'Owner 身份不可修改。' };
     const teamError = validateTeams(draft.teamIds) || validateRemovedTeams(previous, draft.teamIds);
     if (teamError) return { error: teamError };
     if (!previous) {
@@ -215,7 +217,7 @@ export const useTeamStore = defineStore('im-support-team', () => {
     if (previous && draft.version !== previous.version) return { error: '成员信息已更新，请刷新后重试。' };
     const value: TeamMember = {
       account: draft.account.trim(), avatar: draft.avatar, enabled: Boolean(draft.enabled), id: draft.id, kind: 'human',
-      name: draft.name.trim(), online: Boolean(draft.enabled && previous?.online), protected: previous?.protected, role: draft.role,
+      name: draft.name.trim(), online: Boolean(draft.enabled && previous?.online), protected: previous?.protected, role: normalizeRoleId(draft.role),
       teamIds: [...new Set(draft.teamIds)], timezone: draft.timezone || 'UTC+08:00', version: (previous?.version ?? 0) + 1,
     };
     const index = members.value.findIndex((member) => member.id === draft.id);
