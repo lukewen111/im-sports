@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - ui-revamp-demo-20261105
   workflow_dispatch:
 
 permissions:
