@@ -42,6 +42,7 @@ const detailCollapsed = ref(false);
 const transferOpen = ref(false);
 const endedDate = ref('');
 const endedHuman = ref('');
+const endedAi = ref('');
 const endedChannel = ref<ChannelType | ''>('');
 const drafts = ref<Record<string, string>>({});
 const translationMode = ref<Record<string, 'source' | 'translation'>>({});
@@ -131,22 +132,18 @@ const localDate = (value?: string) => {
   if (Number.isNaN(+date)) return '';
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
-const listPending = ref('');
-const listReceiving = ref('');
-const listAwaiting = ref('');
 const filterOpen = ref(false);
+/* PRD §3.3：搜索与筛选仅「已结束」分组提供，项为关键词/日期/团队/人类/AI/渠道类型 */
 const activeFilterCount = computed(() => {
   let count = 0;
   if (endedTeam.value) count += 1;
   if (endedHuman.value) count += 1;
+  if (endedAi.value) count += 1;
   if (endedChannel.value) count += 1;
-  if (listPending.value) count += 1;
-  if (listReceiving.value) count += 1;
-  if (listAwaiting.value) count += 1;
-  if (group.value === 'ended' && endedDate.value) count += 1;
+  if (endedDate.value) count += 1;
   return count;
 });
-const listFiltersActive = computed(() => Boolean(endedKeyword.value.trim() || activeFilterCount.value));
+const listFiltersActive = computed(() => group.value === 'ended' && Boolean(endedKeyword.value.trim() || activeFilterCount.value));
 function sessionMatchesKeyword(session: DemoSession) {
   const keyword = endedKeyword.value.trim().toLowerCase();
   if (!keyword) return true;
@@ -158,19 +155,13 @@ function sessionMatchesKeyword(session: DemoSession) {
   ].join(' ').toLowerCase();
   return source.includes(keyword);
 }
-const yesNoMatches = (value: string, flag: boolean) => {
-  if (!value) return true;
-  return value === 'yes' ? flag : !flag;
-};
-function matchesListFilters(session: DemoSession) {
+function matchesEndedFilters(session: DemoSession) {
   if (!sessionMatchesKeyword(session)) return false;
   if (endedTeam.value && session.teamId !== endedTeam.value) return false;
   if (endedHuman.value && !(session.assigneeKind === 'human' && session.assigneeId === endedHuman.value)) return false;
+  if (endedAi.value && !(session.assigneeKind === 'ai' && session.assigneeId === endedAi.value)) return false;
   if (endedChannel.value && store.sessionChannelType(session) !== endedChannel.value) return false;
-  if (!yesNoMatches(listPending.value, session.status === 'pending')) return false;
-  if (!yesNoMatches(listReceiving.value, session.status === 'active' && Boolean(session.assigneeId))) return false;
-  if (!yesNoMatches(listAwaiting.value, store.lastMessage(session)?.role === 'customer')) return false;
-  if (group.value === 'ended' && endedDate.value && localDate(session.endedAt) !== endedDate.value) return false;
+  if (endedDate.value && localDate(session.endedAt) !== endedDate.value) return false;
   return true;
 }
 function clearListFilters() {
@@ -178,17 +169,15 @@ function clearListFilters() {
   endedTeam.value = '';
   endedDate.value = '';
   endedHuman.value = '';
+  endedAi.value = '';
   endedChannel.value = '';
-  listPending.value = '';
-  listReceiving.value = '';
-  listAwaiting.value = '';
 }
 
 const visible = computed(() => {
   if (group.value === 'ended') {
     return store.sessions
       .filter((session) => session.status === 'ended' && (session.everAssigned ? inAssignedScope(session) : access.permissions.pending))
-      .filter(matchesListFilters)
+      .filter(matchesEndedFilters)
       .sort((left, right) => +new Date(right.endedAt || right.createdAt) - +new Date(left.endedAt || left.createdAt));
   }
   const rows = store.sessions.filter((session) => session.status !== 'ended');
@@ -198,7 +187,8 @@ const visible = computed(() => {
   else if (group.value === 'colleagues') scoped = rows.filter((session) => session.assigneeKind === 'human' && session.assigneeId !== access.currentId && inAssignedScope(session));
   else if (group.value === 'pending') scoped = rows.filter((session) => session.status === 'pending');
   else scoped = rows.filter((session) => inAssignedScope(session) || (session.status === 'pending' && access.permissions.pending));
-  return scoped.filter(matchesListFilters).sort((left, right) => group.value === 'pending'
+  /* PRD §3.3：其他分组不提供搜索与筛选 */
+  return scoped.sort((left, right) => group.value === 'pending'
     ? +new Date(left.queueEnteredAt || left.createdAt) - +new Date(right.queueEnteredAt || right.createdAt)
     : +new Date(store.lastMessage(right)?.sentAt || right.createdAt) - +new Date(store.lastMessage(left)?.sentAt || left.createdAt));
 });
@@ -236,14 +226,13 @@ watch(visible, (rows) => {
   if (!rows.some((session) => session.id === activeId.value)) activeId.value = rows[0]?.id || '';
 }, { immediate: true });
 watch(group, () => {
+  /* PRD §3.3：切换离开「已结束」时清空关键词与筛选，再次进入不带入 */
   endedKeyword.value = '';
   endedTeam.value = '';
   endedDate.value = '';
   endedHuman.value = '';
+  endedAi.value = '';
   endedChannel.value = '';
-  listPending.value = '';
-  listReceiving.value = '';
-  listAwaiting.value = '';
 });
 
 const emptyText = computed(() => ({
@@ -254,7 +243,7 @@ const emptyText = computed(() => ({
   mine: '暂无由你接待的会话，可从「待分配」或「AI 成员」接管',
   pending: '暂无等待分配的会话',
 })[group.value]);
-/* 分组数字口径：该分组当前进行中（正在接待）的会话数，与未读无关 */
+/* 分组数字口径：该分组当前进行中的会话数，与未读无关 */
 const groupCounts = computed(() => {
   const open = store.sessions.filter((session) => session.status === 'active' || session.status === 'pending');
   return {
@@ -748,7 +737,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
         <header class="list-head">
           <h2>会话列表</h2>
           <span v-if="groupCount > 0" class="list-head-count">{{ groupCount }}</span>
-          <ElPopover v-model:visible="filterOpen" placement="bottom-end" trigger="click" :width="340" :offset="8" :show-arrow="false" popper-class="inbox-filter-popper">
+          <ElPopover v-if="group === 'ended'" v-model:visible="filterOpen" placement="bottom-end" trigger="click" :width="340" :offset="8" :show-arrow="false" popper-class="inbox-filter-popper">
             <template #reference>
               <button type="button" class="list-filter-btn" aria-label="筛选会话" :aria-expanded="filterOpen">
                 <svg class="filter-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M1.4 2h9.2l-3.5 4.2v3.9l-2.2-1.2V6.2L1.4 2Z" /></svg>
@@ -766,33 +755,14 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
               <div class="filter-group-label">成员</div>
               <div class="filter-row">
                 <span class="filter-label">人工成员</span>
-                <ElSelect v-model="endedHuman" clearable placeholder="全部成员" class="filter-control" :teleported="false">
+                <ElSelect v-model="endedHuman" clearable placeholder="全部人类成员" class="filter-control" :teleported="false">
                   <ElOption v-for="item in team.humans" :key="item.id" :label="item.name" :value="item.id" />
                 </ElSelect>
               </div>
               <div class="filter-row">
-                <span class="filter-label">待响应</span>
-                <ElSelect v-model="listAwaiting" clearable placeholder="全部" class="filter-control" :teleported="false">
-                  <ElOption label="全部" value="" />
-                  <ElOption label="待响应" value="yes" />
-                  <ElOption label="已响应" value="no" />
-                </ElSelect>
-              </div>
-              <div class="filter-group-label">会话状态</div>
-              <div class="filter-row">
-                <span class="filter-label">待分配</span>
-                <ElSelect v-model="listPending" clearable placeholder="全部" class="filter-control" :teleported="false">
-                  <ElOption label="全部" value="" />
-                  <ElOption label="待分配" value="yes" />
-                  <ElOption label="非待分配" value="no" />
-                </ElSelect>
-              </div>
-              <div class="filter-row">
-                <span class="filter-label">正在接待</span>
-                <ElSelect v-model="listReceiving" clearable placeholder="全部" class="filter-control" :teleported="false">
-                  <ElOption label="全部" value="" />
-                  <ElOption label="正在接待" value="yes" />
-                  <ElOption label="非接待中" value="no" />
+                <span class="filter-label">AI 成员</span>
+                <ElSelect v-model="endedAi" clearable placeholder="全部 AI 成员" class="filter-control" :teleported="false">
+                  <ElOption v-for="item in team.aiMembers" :key="item.id" :label="item.name" :value="item.id" />
                 </ElSelect>
               </div>
               <div class="filter-group-label">渠道</div>
@@ -802,8 +772,8 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
                   <ElOption v-for="(meta, type) in channelMeta" :key="type" :label="meta.label" :value="type" />
                 </ElSelect>
               </div>
-              <div v-if="group === 'ended'" class="filter-group-label">时间</div>
-              <div v-if="group === 'ended'" class="filter-row">
+              <div class="filter-group-label">时间</div>
+              <div class="filter-row">
                 <span class="filter-label">结束日期</span>
                 <ElDatePicker v-model="endedDate" type="date" value-format="YYYY-MM-DD" placeholder="全部日期" clearable class="filter-control filter-date" :teleported="false" />
               </div>
@@ -814,7 +784,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
             </div>
           </ElPopover>
         </header>
-        <div class="list-search">
+        <div v-if="group === 'ended'" class="list-search">
           <ElInput v-model="endedKeyword" clearable placeholder="搜索聊天、客户或会话 ID" class="list-search-input" />
         </div>
         <div class="conv-list">
