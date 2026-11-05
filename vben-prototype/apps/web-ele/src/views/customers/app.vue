@@ -8,6 +8,7 @@ import {
   ElMessage,
   ElOption,
   ElPagination,
+  ElPopover,
   ElSelect,
   ElTable,
   ElTableColumn,
@@ -131,6 +132,14 @@ function customerChannelTypes(customer: DemoCustomer) {
 
 const scopedCustomers = computed(() => store.customers.filter(customerInScope));
 const hasFilters = computed(() => Boolean(keyword.value.trim() || channelType.value || teamIds.value.length !== access.visibleTeams.length || dateRange.value?.length));
+/** 筛选按钮角标：按已生效的条件组计数（团队 / 渠道类型 / 最近活跃） */
+const activeFilterCount = computed(() => {
+  let count = 0;
+  if (teamIds.value.length && teamIds.value.length !== access.visibleTeams.length) count += 1;
+  if (channelType.value) count += 1;
+  if (dateRange.value?.length) count += 1;
+  return count;
+});
 const rows = computed(() => scopedCustomers.value
   .filter((customer) => {
     const text = keyword.value.trim().toLowerCase();
@@ -248,23 +257,71 @@ function rowClassName({ row }: { row: DemoCustomer }) {
         </header>
 
         <div class="toolbar">
-          <ElInput v-model="keyword" clearable placeholder="搜索客户名称、客户 ID、邮箱或手机号" class="search-input" />
-          <ElSelect v-model="channelType" clearable placeholder="全部渠道" class="type-select">
-            <ElOption label="全部渠道" value="" />
-            <ElOption v-for="type in filterChannelTypes" :key="type" :label="channelMeta[type].label" :value="type" />
-          </ElSelect>
-          <ElSelect v-model="teamIds" multiple collapse-tags collapse-tags-tooltip clearable placeholder="团队" class="team-select">
-            <ElOption v-for="item in access.visibleTeams" :key="item.id" :label="item.name" :value="item.id" />
-          </ElSelect>
-          <ElDatePicker
-            v-model="dateRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            range-separator="至"
-            start-placeholder="最近活跃起"
-            end-placeholder="最近活跃止"
-            class="date-range"
-          />
+          <ElInput v-model="keyword" clearable placeholder="搜索客户名称、客户 ID、邮箱或手机号" class="search-input">
+            <template #prefix>
+              <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="6.8" cy="6.8" r="4.6" />
+                <path d="M10.3 10.3 14 14" />
+              </svg>
+            </template>
+          </ElInput>
+          <ElPopover
+            placement="bottom-end"
+            trigger="click"
+            :width="340"
+            :offset="8"
+            :show-arrow="false"
+            popper-class="customer-filter-popper"
+          >
+            <template #reference>
+              <ElButton class="filter-trigger">
+                <svg class="filter-icon" viewBox="0 0 12 12" aria-hidden="true">
+                  <path d="M1.4 2h9.2l-3.5 4.2v3.9l-2.2-1.2V6.2L1.4 2Z" />
+                </svg>
+                <span>筛选</span>
+                <span v-if="activeFilterCount" class="filter-count">{{ activeFilterCount }}</span>
+              </ElButton>
+            </template>
+            <div class="filter-panel">
+              <div class="filter-row">
+                <span class="filter-label">团队</span>
+                <ElSelect
+                  v-model="teamIds"
+                  multiple
+                  collapse-tags
+                  collapse-tags-tooltip
+                  clearable
+                  placeholder="全部团队"
+                  class="filter-control"
+                  :teleported="false"
+                >
+                  <ElOption v-for="item in access.visibleTeams" :key="item.id" :label="item.name" :value="item.id" />
+                </ElSelect>
+              </div>
+              <div class="filter-row">
+                <span class="filter-label">渠道类型</span>
+                <ElSelect v-model="channelType" placeholder="全部渠道" class="filter-control" :teleported="false">
+                  <ElOption label="全部渠道" value="" />
+                  <ElOption v-for="type in filterChannelTypes" :key="type" :label="channelMeta[type].label" :value="type" />
+                </ElSelect>
+              </div>
+              <div class="filter-row">
+                <span class="filter-label">最近活跃</span>
+                <ElDatePicker
+                  v-model="dateRange"
+                  type="daterange"
+                  value-format="YYYY-MM-DD"
+                  range-separator="至"
+                  start-placeholder="起"
+                  end-placeholder="止"
+                  class="filter-control filter-date"
+                  placement="bottom-start"
+                  :teleported="false"
+                  :popper-options="{ strategy: 'fixed', modifiers: [{ name: 'flip', enabled: false }] }"
+                />
+              </div>
+            </div>
+          </ElPopover>
           <ElButton text class="clear-button" @click="resetFilters">清除筛选</ElButton>
         </div>
 
@@ -274,30 +331,31 @@ function rowClassName({ row }: { row: DemoCustomer }) {
           :data="pagedRows"
           :height="tableHeight || undefined"
           :row-class-name="rowClassName"
+          show-header
           @row-click="openRow"
         >
-          <ElTableColumn label="客户" min-width="160">
+          <ElTableColumn label="客户" width="200">
             <template #default="{ row }">
               <div class="customer-cell">
                 <i class="avatar" :style="avatarStyle(customerIdentity(row))"><img v-if="customerIdentity(row).avatarUrl" :src="customerIdentity(row).avatarUrl" alt="" /><template v-else>{{ customerIdentity(row).initial }}</template></i>
-                <div>
+                <div class="customer-text">
                   <b>{{ row.name }}</b>
                   <small>{{ row.id }}</small>
                 </div>
               </div>
             </template>
           </ElTableColumn>
-          <ElTableColumn label="邮箱" min-width="104">
-            <template #default="{ row }">{{ row.email || '—' }}</template>
+          <ElTableColumn label="邮箱" min-width="110">
+            <template #default="{ row }"><span class="cell-text" :class="{ 'is-empty': !row.email }">{{ row.email || '—' }}</span></template>
           </ElTableColumn>
-          <ElTableColumn label="手机号" min-width="92">
-            <template #default="{ row }">{{ row.phone || '—' }}</template>
+          <ElTableColumn label="手机号" min-width="98">
+            <template #default="{ row }"><span class="cell-text" :class="{ 'is-empty': !row.phone }">{{ row.phone || '—' }}</span></template>
           </ElTableColumn>
-          <ElTableColumn label="最近活跃" min-width="100">
-            <template #default="{ row }">{{ formatChatTime(row.lastActive) }}</template>
+          <ElTableColumn label="最近活跃" min-width="94">
+            <template #default="{ row }"><span class="cell-text">{{ formatChatTime(row.lastActive) }}</span></template>
           </ElTableColumn>
-          <ElTableColumn label="会话数" width="62">
-            <template #default="{ row }">{{ sessionCount(row.id) }}</template>
+          <ElTableColumn label="会话数" width="64" align="right">
+            <template #default="{ row }"><span class="cell-text">{{ sessionCount(row.id) }}</span></template>
           </ElTableColumn>
           <ElTableColumn label="操作" width="88" fixed="right">
             <template #default="{ row }">
@@ -389,77 +447,153 @@ function rowClassName({ row }: { row: DemoCustomer }) {
   flex: 0 0 48px;
   height: 48px;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
 }
 .card-head h1 { margin: 0; color: var(--ink); font-size: 16px; font-weight: 500; line-height: 24px; }
 
-.toolbar { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 6px; align-items: center; padding: 12px 24px; }
-.search-input { flex: 1 1 160px; width: auto; min-width: 150px; }
-.type-select { flex: 0 0 104px; width: 104px; }
-.team-select { flex: 1 1 190px; width: auto; min-width: 190px; }
-.date-range { flex: 0 0 auto; }
-.toolbar :deep(.date-range) {
-  flex: 0 0 190px !important;
-  width: 190px !important;
-  min-width: 190px;
-  max-width: 190px;
+.toolbar { display: flex; flex: 0 0 auto; gap: 10px; align-items: center; padding: 12px 16px; }
+.search-input { flex: 0 0 140px; width: 140px; min-width: 0; }
+@media (max-width: 1366px) {
+  .search-input { flex-basis: 128px; width: 128px; }
 }
-.clear-button { margin-left: auto; color: var(--ink-2); font-size: 12px; }
+.filter-trigger.el-button {
+  flex: 0 0 auto;
+  height: 32px;
+  margin-left: 0;
+  padding: 0 12px;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  background: #fff;
+  border: 1px solid var(--control-line);
+  border-radius: 8px;
+}
+.filter-trigger.el-button:not(.is-disabled):hover,
+.filter-trigger.el-button:not(.is-disabled):focus {
+  color: var(--ink);
+  background: #f5f5f5;
+  border-color: var(--control-line);
+}
+.filter-icon { width: 12px; height: 12px; }
+.filter-icon path { fill: currentcolor; }
+.filter-count {
+  display: inline-flex;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  background: var(--ink);
+  border-radius: 8px;
+}
+.clear-button { margin-left: 0; color: var(--ink-2); font-size: 12px; }
 
-.toolbar :deep(.el-input__wrapper),
-.toolbar :deep(.el-select__wrapper),
-.toolbar :deep(.el-date-editor.el-input__wrapper) {
+:global(.customer-filter-popper.el-popover) {
+  padding: 4px 12px;
+  border: 1px solid #ececed;
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgb(19 19 23 / 12%);
+}
+:global(.customer-filter-popper .el-popper__arrow) { display: none; }
+:global(.customer-filter-popper .filter-panel) { display: grid; }
+:global(.customer-filter-popper .filter-row) {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f1;
+}
+:global(.customer-filter-popper .filter-row:last-child) { border-bottom: 0; }
+:global(.customer-filter-popper .filter-label) {
+  flex: 0 0 60px;
+  color: #62626d;
+  font-size: 12px;
+  line-height: 18px;
+}
+:global(.customer-filter-popper .filter-control) { flex: 1 1 auto; width: auto; min-width: 0; }
+:global(.customer-filter-popper .filter-date) { flex: 1 1 auto; width: 100%; }
+:global(.customer-filter-popper .filter-control .el-input__wrapper),
+:global(.customer-filter-popper .filter-control .el-select__wrapper) {
+  min-height: 30px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #c9c9cd inset;
+}
+:global(.customer-filter-popper .filter-control .el-input__inner),
+:global(.customer-filter-popper .filter-control .el-range-input),
+:global(.customer-filter-popper .filter-control .el-range-separator) { font-size: 12px; }
+
+.toolbar :deep(.el-input__wrapper) {
   min-height: 32px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 0 0 1px var(--control-line) inset;
 }
-.toolbar :deep(.el-input__wrapper.is-focus),
-.toolbar :deep(.el-select__wrapper.is-focused),
-.toolbar :deep(.el-date-editor.is-active) { box-shadow: 0 0 0 1px var(--ink) inset; }
+.toolbar :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px var(--ink) inset; }
 .toolbar :deep(.el-input__inner) { font-size: 13px; }
-.toolbar :deep(.el-date-editor .el-range-separator),
-.toolbar :deep(.el-date-editor .el-range-input) { font-size: 12px; }
+/* 搜索框：左内距 10、图标 14、图标与文字间距 6 */
+.search-input :deep(.el-input__wrapper) { padding: 0 10px; }
+.search-input :deep(.el-input__prefix) { color: var(--ink-3); }
+.search-input :deep(.el-input__prefix-inner > :last-child) { margin-right: 6px; }
+.search-icon { width: 14px; height: 14px; fill: none; stroke: currentcolor; stroke-width: 1.3; }
 
-.table-area { flex: 1; min-height: 0; min-width: 0; padding: 0 24px; }
+.table-area { flex: 1; min-height: 0; min-width: 0; padding: 0 4px; }
 
 .list-card :deep(.el-table) {
   --el-table-border-color: var(--line);
-  --el-table-header-bg-color: transparent;
+  --el-table-bg-color: #fff;
+  --el-table-tr-bg-color: #fff;
+  --el-table-header-bg-color: #fff;
   --el-table-header-text-color: var(--ink-2);
-  --el-table-row-hover-bg-color: #f5f5f5;
+  --el-table-row-hover-bg-color: transparent;
   --el-table-text-color: var(--ink);
   font-size: 13px;
 }
 .list-card :deep(.el-table__inner-wrapper::before) { display: none; }
-.list-card :deep(.el-table tr),
-.list-card :deep(.el-table th.el-table__cell),
-.list-card :deep(.el-table td.el-table__cell) { background: transparent; }
 .list-card :deep(.el-table th.el-table__cell) {
-  height: 44px;
+  height: 42px;
   font-size: 12px;
   font-weight: 500;
   color: var(--ink-2);
+  background: #fff;
   border-bottom: 1px solid var(--line);
 }
 .list-card :deep(.el-table td.el-table__cell) {
-  height: 52px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
+  height: 56px;
+  padding: 0;
+  border-bottom: 1px solid #f2f2f3;
 }
 .list-card :deep(.el-table__row) { cursor: pointer; }
-.list-card :deep(.el-table__row.is-active td.el-table__cell) { background: #eeeeef; }
-.list-card :deep(.el-table .cell) { padding: 0 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* 操作列固定右侧：补不透明底色，横向滚动时不透明叠字 */
-.list-card :deep(.el-table-fixed-column--right) { background: #fff !important; }
-.list-card :deep(.el-table__row:hover > td.el-table-fixed-column--right) { background: #f5f5f5 !important; }
-.list-card :deep(.el-table__row.is-active > td.el-table-fixed-column--right) { background: #eeeeef !important; }
+.list-card :deep(.el-table .cell) { position: relative; z-index: 0; padding: 0 12px; }
+/* 行 hover 用内缩圆角底色（左右 inset 6px），文字与头像不位移 */
+.list-card :deep(.el-table__body .cell::before) {
+  content: "";
+  position: absolute;
+  inset: 4px -6px;
+  z-index: -1;
+  background: transparent;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+.list-card :deep(.el-table__row:hover .cell::before) { background: #f5f5f6; }
+.list-card :deep(.el-table__body td:first-child .cell::before) { left: 6px; }
+.list-card :deep(.el-table__body td:last-child .cell::before) { right: 6px; }
+.cell-text { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cell-text.is-empty { color: var(--ink-3); }
+/* 操作列固定右侧：三档表格均无横向滚动，底色透明以承接整行 hover 圆角 */
+.list-card :deep(.el-table-fixed-column--right) { background: transparent !important; }
 
 .customer-cell { display: flex; gap: 10px; align-items: center; min-width: 0; }
-.customer-cell b { display: block; overflow: hidden; font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-.customer-cell small { display: block; margin-top: 2px; overflow: hidden; color: var(--ink-3); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.customer-text { display: block; min-width: 0; }
+.customer-cell b { display: block; overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 500; line-height: 20px; white-space: nowrap; text-overflow: ellipsis; }
+.customer-cell small { display: block; margin-top: 2px; overflow: hidden; color: var(--ink-3); font-size: 12px; line-height: 16px; white-space: nowrap; text-overflow: ellipsis; }
 .avatar {
   display: grid;
   flex: 0 0 auto;
@@ -477,15 +611,20 @@ function rowClassName({ row }: { row: DemoCustomer }) {
 .glyph-mini :deep(.channel-glyph) { width: 24px; height: 24px; border: 0; background: #f5f5f5; transform: scale(0.8); transform-origin: center; }
 .glyph-mini :deep(.channel-glyph svg) { width: 16px; height: 16px; }
 
-.row-actions { display: flex; gap: 10px; align-items: center; }
+.row-actions { display: flex; justify-content: flex-end; align-items: center; }
 .row-actions .row-action-btn {
-  height: 26px;
-  padding: 0 10px;
+  width: 64px;
+  height: 28px;
+  padding: 0;
   font-size: 12px;
-  border-radius: 6px;
+  border-color: var(--ui-accent);
+  border-radius: 8px;
+  background: #fff;
 }
+.row-actions .row-action-btn:not(.is-disabled):hover { background: var(--ui-accent-soft); }
+.row-actions .row-action-btn:not(.is-disabled):active { background: var(--ui-accent-soft-strong); }
 
-.table-foot { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 8px; padding: 12px 24px 16px; }
+.table-foot { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 8px; padding: 12px 16px 16px; }
 .table-foot :deep(.el-pagination) { --el-pagination-font-size: 12px; --el-pagination-button-height: 28px; }
 .empty-state { padding: 36px 0 28px; color: var(--ink-3); font-size: 12px; }
 .empty-state p { margin: 0 0 6px; }
