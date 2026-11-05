@@ -576,10 +576,14 @@ function rowClassName({ row }: { row: DemoCustomer }) {
 .list-card :deep(.el-table__body .cell::before) {
   content: "";
   position: absolute;
-  inset: 4px -6px;
+  top: 50%;
+  right: -6px;
+  left: -6px;
+  height: 48px;
   z-index: -1;
   background: transparent;
   border-radius: 8px;
+  transform: translateY(-50%);
   transition: background-color 0.15s ease;
 }
 .list-card :deep(.el-table__row:hover .cell::before) { background: #f5f5f6; }
