@@ -3,7 +3,7 @@ import type { DemoAttachment, DemoMessage, DemoSession, SystemEventType } from '
 
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ElButton, ElDatePicker, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElTooltip } from 'element-plus';
+import { ElButton, ElDatePicker, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElMessage, ElMessageBox, ElOption, ElPopover, ElSelect, ElTooltip } from 'element-plus';
 import { QiArchive, QiAttachment, QiClock, QiCrossCircleCenter, QiEmojiSmile, QiInbox, QiMore, QiRobot, QiSendRight, QiTransfer, QiTranslate, QiUser, QiUser3 } from 'qingicon-vue';
 
 import type { ChannelType } from '#/features/channels/channel-data';
@@ -22,6 +22,8 @@ import { formatChatTime } from '#/utils/chat-time';
 type GroupKey = 'ai' | 'all' | 'colleagues' | 'ended' | 'mine' | 'pending';
 
 const LANGUAGES = ['简体中文', '繁体中文', '英语', '越南语', '泰语', '高棉语', '缅甸语', '老挝语', '西班牙语'];
+// 翻译预览条左端语种胶囊的简称
+const LANG_CODES: Record<string, string> = { 简体中文: 'zh', 繁体中文: 'zh', 英语: 'en', 越南语: 'vi', 泰语: 'th', 高棉语: 'km', 缅甸语: 'my', 老挝语: 'lo', 西班牙语: 'es' };
 
 const access = usePrototypeAccess();
 const team = useTeamStore();
@@ -40,7 +42,6 @@ const detailCollapsed = ref(false);
 const transferOpen = ref(false);
 const endedDate = ref('');
 const endedHuman = ref('');
-const endedAi = ref('');
 const endedChannel = ref<ChannelType | ''>('');
 const drafts = ref<Record<string, string>>({});
 const translationMode = ref<Record<string, 'source' | 'translation'>>({});
@@ -74,6 +75,7 @@ const ticker = window.setInterval(() => (now.value = Date.now()), 1000);
 onBeforeUnmount(() => {
   window.clearInterval(ticker);
   window.removeEventListener('keydown', onPreviewKey);
+  window.removeEventListener('pointerdown', onLangMenuPointerDown);
 });
 function onPreviewKey(event: KeyboardEvent) {
   if (event.key === 'Escape' && previewMedia.value) closePreview();
@@ -129,7 +131,22 @@ const localDate = (value?: string) => {
   if (Number.isNaN(+date)) return '';
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
-const endedFiltersActive = computed(() => Boolean(endedKeyword.value.trim() || endedTeam.value || endedDate.value || endedHuman.value || endedAi.value || endedChannel.value));
+const listPending = ref('');
+const listReceiving = ref('');
+const listAwaiting = ref('');
+const filterOpen = ref(false);
+const activeFilterCount = computed(() => {
+  let count = 0;
+  if (endedTeam.value) count += 1;
+  if (endedHuman.value) count += 1;
+  if (endedChannel.value) count += 1;
+  if (listPending.value) count += 1;
+  if (listReceiving.value) count += 1;
+  if (listAwaiting.value) count += 1;
+  if (group.value === 'ended' && endedDate.value) count += 1;
+  return count;
+});
+const listFiltersActive = computed(() => Boolean(endedKeyword.value.trim() || activeFilterCount.value));
 function sessionMatchesKeyword(session: DemoSession) {
   const keyword = endedKeyword.value.trim().toLowerCase();
   if (!keyword) return true;
@@ -141,29 +158,37 @@ function sessionMatchesKeyword(session: DemoSession) {
   ].join(' ').toLowerCase();
   return source.includes(keyword);
 }
-function matchesEnded(session: DemoSession) {
+const yesNoMatches = (value: string, flag: boolean) => {
+  if (!value) return true;
+  return value === 'yes' ? flag : !flag;
+};
+function matchesListFilters(session: DemoSession) {
   if (!sessionMatchesKeyword(session)) return false;
   if (endedTeam.value && session.teamId !== endedTeam.value) return false;
-  if (endedDate.value && localDate(session.endedAt) !== endedDate.value) return false;
   if (endedHuman.value && !(session.assigneeKind === 'human' && session.assigneeId === endedHuman.value)) return false;
-  if (endedAi.value && !(session.assigneeKind === 'ai' && session.assigneeId === endedAi.value)) return false;
   if (endedChannel.value && store.sessionChannelType(session) !== endedChannel.value) return false;
+  if (!yesNoMatches(listPending.value, session.status === 'pending')) return false;
+  if (!yesNoMatches(listReceiving.value, session.status === 'active' && Boolean(session.assigneeId))) return false;
+  if (!yesNoMatches(listAwaiting.value, store.lastMessage(session)?.role === 'customer')) return false;
+  if (group.value === 'ended' && endedDate.value && localDate(session.endedAt) !== endedDate.value) return false;
   return true;
 }
-function clearEndedFilters() {
+function clearListFilters() {
   endedKeyword.value = '';
   endedTeam.value = '';
   endedDate.value = '';
   endedHuman.value = '';
-  endedAi.value = '';
   endedChannel.value = '';
+  listPending.value = '';
+  listReceiving.value = '';
+  listAwaiting.value = '';
 }
 
 const visible = computed(() => {
   if (group.value === 'ended') {
     return store.sessions
       .filter((session) => session.status === 'ended' && (session.everAssigned ? inAssignedScope(session) : access.permissions.pending))
-      .filter(matchesEnded)
+      .filter(matchesListFilters)
       .sort((left, right) => +new Date(right.endedAt || right.createdAt) - +new Date(left.endedAt || left.createdAt));
   }
   const rows = store.sessions.filter((session) => session.status !== 'ended');
@@ -173,7 +198,7 @@ const visible = computed(() => {
   else if (group.value === 'colleagues') scoped = rows.filter((session) => session.assigneeKind === 'human' && session.assigneeId !== access.currentId && inAssignedScope(session));
   else if (group.value === 'pending') scoped = rows.filter((session) => session.status === 'pending');
   else scoped = rows.filter((session) => inAssignedScope(session) || (session.status === 'pending' && access.permissions.pending));
-  return scoped.filter(sessionMatchesKeyword).sort((left, right) => group.value === 'pending'
+  return scoped.filter(matchesListFilters).sort((left, right) => group.value === 'pending'
     ? +new Date(left.queueEnteredAt || left.createdAt) - +new Date(right.queueEnteredAt || right.createdAt)
     : +new Date(store.lastMessage(right)?.sentAt || right.createdAt) - +new Date(store.lastMessage(left)?.sentAt || left.createdAt));
 });
@@ -215,11 +240,12 @@ watch(group, () => {
   endedTeam.value = '';
   endedDate.value = '';
   endedHuman.value = '';
-  endedAi.value = '';
   endedChannel.value = '';
+  listPending.value = '';
+  listReceiving.value = '';
+  listAwaiting.value = '';
 });
 
-const groupTitle = computed(() => ({ ai: 'AI 成员', all: '全部会话', colleagues: '同事', ended: '已结束', mine: '我的会话', pending: '待分配' })[group.value]);
 const emptyText = computed(() => ({
   ai: '暂无 AI 成员接待中的会话',
   all: '暂无可见的未结束会话',
@@ -346,15 +372,41 @@ const notification = computed(() => store.memberNotificationFor(access.currentId
 const noticeState = computed(() => store.notificationState(access.currentId));
 const workLanguage = computed(() => translation.value.workLanguage);
 const previewLanguages = computed(() => LANGUAGES.filter((language) => language !== workLanguage.value));
+// 目标语种优先取本会话手动选的，其次取成员设置的访客语言
+const previewLanguage = computed(() => previewTarget.value || translation.value.visitorLanguage || previewLanguages.value[0]);
+const previewLanguageCode = computed(() => {
+  const language = previewLanguage.value;
+  return (language && LANG_CODES[language]) || language || '';
+});
 const autoPreview = computed(() => {
   const text = input.value.trim();
-  if (!text) return undefined;
-  const target = previewTarget.value || translation.value.visitorLanguage || previewLanguages.value[0];
-  if (!target || target === workLanguage.value) return undefined;
-  const result = store.previewTranslation(text, target, workLanguage.value);
+  if (!text || !previewLanguage.value || previewLanguage.value === workLanguage.value) return undefined;
+  const result = store.previewTranslation(text, previewLanguage.value, workLanguage.value);
   return result.error || !result.translation ? undefined : result.translation;
 });
-const sendPreview = computed(() => autoPreview.value);
+// PRD：成员工作语言与访客语言一致时不出现发送翻译预览
+const previewAvailable = computed(() => Boolean(previewLanguage.value && previewLanguage.value !== workLanguage.value));
+const previewKey = computed(() => `${previewLanguage.value}|${input.value.trim()}`);
+// × 只收起当前这条预览：输入内容或目标语种变化时重新出现
+const previewDismissed = ref<string | null>(null);
+const transPreviewVisible = computed(() => previewAvailable.value && previewDismissed.value !== previewKey.value);
+// 目标语种菜单只有一份状态，由左端语种胶囊触发
+const langMenuOpen = ref(false);
+function toggleLangMenu() {
+  langMenuOpen.value = !langMenuOpen.value;
+}
+function selectPreviewLanguage(language: string) {
+  changePreviewTarget(language);
+  langMenuOpen.value = false;
+}
+function onLangMenuPointerDown(event: PointerEvent) {
+  if (!langMenuOpen.value) return;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('.trans-lang, .trans-lang-menu')) return;
+  langMenuOpen.value = false;
+}
+window.addEventListener('pointerdown', onLangMenuPointerDown);
+watch(transPreviewVisible, (value) => { if (!value) langMenuOpen.value = false; });
 // 客户消息语言与成员工作语言不一致时自动翻译；一致时不出现翻译入口
 function autoTranslate() {
   if (!active.value) return;
@@ -367,6 +419,8 @@ watch(active, (session, previous) => {
   if (previous && previous.id !== session?.id) drafts.value[previous.id] = input.value;
   input.value = session ? drafts.value[session.id] || '' : '';
   previewTarget.value = '';
+  previewDismissed.value = null;
+  langMenuOpen.value = false;
   emojiOpen.value = false;
   if (!session) return;
   if (session.assigneeId === access.currentId && session.assigneeKind === 'human') store.markRead(session.id, access.currentId);
@@ -386,9 +440,19 @@ function translateMessage(message: DemoMessage) {
 }
 function changePreviewTarget(value: string) {
   previewTarget.value = value;
+  previewDismissed.value = null;
 }
 function usePreview() {
-  if (sendPreview.value) input.value = sendPreview.value.text;
+  const text = autoPreview.value?.text;
+  if (!text) return;
+  input.value = text;
+  previewDismissed.value = previewKey.value;
+  langMenuOpen.value = false;
+  ElMessage.success('已使用译文');
+}
+function dismissPreview() {
+  previewDismissed.value = previewKey.value;
+  langMenuOpen.value = false;
 }
 function messageMode(message: DemoMessage): 'source' | 'translation' {
   return translationMode.value[message.id] || (message.translation ? 'translation' : 'source');
@@ -681,30 +745,77 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
 
     <div class="workspace-card">
       <aside class="list-pane">
-        <header v-if="group !== 'ended'" class="list-head">
-          <h2>{{ groupTitle }}</h2>
+        <header class="list-head">
+          <h2>会话列表</h2>
           <span v-if="groupCount > 0" class="list-head-count">{{ groupCount }}</span>
+          <ElPopover v-model:visible="filterOpen" placement="bottom-end" trigger="click" :width="340" :offset="8" :show-arrow="false" popper-class="inbox-filter-popper">
+            <template #reference>
+              <button type="button" class="list-filter-btn" aria-label="筛选会话" :aria-expanded="filterOpen">
+                <svg class="filter-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M1.4 2h9.2l-3.5 4.2v3.9l-2.2-1.2V6.2L1.4 2Z" /></svg>
+                <span v-if="activeFilterCount" class="filter-count">{{ activeFilterCount }}</span>
+              </button>
+            </template>
+            <div class="list-filter-panel">
+              <div class="filter-group-label">团队</div>
+              <div class="filter-row">
+                <span class="filter-label">团队</span>
+                <ElSelect v-model="endedTeam" clearable placeholder="全部团队" class="filter-control" :teleported="false">
+                  <ElOption v-for="item in access.visibleTeams" :key="item.id" :label="item.name" :value="item.id" />
+                </ElSelect>
+              </div>
+              <div class="filter-group-label">成员</div>
+              <div class="filter-row">
+                <span class="filter-label">人工成员</span>
+                <ElSelect v-model="endedHuman" clearable placeholder="全部成员" class="filter-control" :teleported="false">
+                  <ElOption v-for="item in team.humans" :key="item.id" :label="item.name" :value="item.id" />
+                </ElSelect>
+              </div>
+              <div class="filter-row">
+                <span class="filter-label">待响应</span>
+                <ElSelect v-model="listAwaiting" clearable placeholder="全部" class="filter-control" :teleported="false">
+                  <ElOption label="全部" value="" />
+                  <ElOption label="待响应" value="yes" />
+                  <ElOption label="已响应" value="no" />
+                </ElSelect>
+              </div>
+              <div class="filter-group-label">会话状态</div>
+              <div class="filter-row">
+                <span class="filter-label">待分配</span>
+                <ElSelect v-model="listPending" clearable placeholder="全部" class="filter-control" :teleported="false">
+                  <ElOption label="全部" value="" />
+                  <ElOption label="待分配" value="yes" />
+                  <ElOption label="非待分配" value="no" />
+                </ElSelect>
+              </div>
+              <div class="filter-row">
+                <span class="filter-label">正在接待</span>
+                <ElSelect v-model="listReceiving" clearable placeholder="全部" class="filter-control" :teleported="false">
+                  <ElOption label="全部" value="" />
+                  <ElOption label="正在接待" value="yes" />
+                  <ElOption label="非接待中" value="no" />
+                </ElSelect>
+              </div>
+              <div class="filter-group-label">渠道</div>
+              <div class="filter-row">
+                <span class="filter-label">渠道类型</span>
+                <ElSelect v-model="endedChannel" clearable placeholder="全部渠道" class="filter-control" :teleported="false">
+                  <ElOption v-for="(meta, type) in channelMeta" :key="type" :label="meta.label" :value="type" />
+                </ElSelect>
+              </div>
+              <div v-if="group === 'ended'" class="filter-group-label">时间</div>
+              <div v-if="group === 'ended'" class="filter-row">
+                <span class="filter-label">结束日期</span>
+                <ElDatePicker v-model="endedDate" type="date" value-format="YYYY-MM-DD" placeholder="全部日期" clearable class="filter-control filter-date" :teleported="false" />
+              </div>
+              <div class="filter-footer">
+                <span v-if="activeFilterCount" class="filter-summary">已生效 {{ activeFilterCount }} 项</span>
+                <button v-if="listFiltersActive" type="button" class="clear-filters" @click="clearListFilters">清除筛选条件</button>
+              </div>
+            </div>
+          </ElPopover>
         </header>
-        <div v-if="group === 'ended'" class="list-search">
-          <ElInput v-model="endedKeyword" clearable placeholder="搜索聊天、客户或会话 ID" />
-        </div>
-        <div v-if="group === 'ended'" class="ended-filter">
-          <div class="filter-grid">
-            <ElSelect v-model="endedTeam" clearable placeholder="团队">
-              <ElOption v-for="item in access.visibleTeams" :key="item.id" :label="item.name" :value="item.id" />
-            </ElSelect>
-            <ElSelect v-model="endedHuman" clearable placeholder="人工成员">
-              <ElOption v-for="item in team.humans" :key="item.id" :label="item.name" :value="item.id" />
-            </ElSelect>
-            <ElSelect v-model="endedAi" clearable placeholder="AI 成员">
-              <ElOption v-for="item in team.aiMembers" :key="item.id" :label="item.name" :value="item.id" />
-            </ElSelect>
-            <ElSelect v-model="endedChannel" clearable placeholder="渠道类型">
-              <ElOption v-for="(meta, type) in channelMeta" :key="type" :label="meta.label" :value="type" />
-            </ElSelect>
-            <ElDatePicker v-model="endedDate" type="date" value-format="YYYY-MM-DD" placeholder="结束日期" clearable class="filter-date" />
-          </div>
-          <button v-if="endedFiltersActive" class="clear-filters" @click="clearEndedFilters">清除筛选条件</button>
+        <div class="list-search">
+          <ElInput v-model="endedKeyword" clearable placeholder="搜索聊天、客户或会话 ID" class="list-search-input" />
         </div>
         <div class="conv-list">
           <button
@@ -733,8 +844,8 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
           </button>
           <div v-if="!visible.length" class="list-empty">
             <span class="empty-dot"></span>
-            <p>{{ group === 'ended' && endedFiltersActive ? '未找到符合条件的会话' : emptyText }}</p>
-            <button v-if="group === 'ended' && endedFiltersActive" class="clear-filters" @click="clearEndedFilters">清除筛选条件</button>
+            <p>{{ listFiltersActive ? '未找到符合条件的会话' : emptyText }}</p>
+            <button v-if="listFiltersActive" type="button" class="clear-filters" @click="clearListFilters">清除筛选条件</button>
           </div>
         </div>
       </aside>
@@ -849,23 +960,46 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
         <ElButton class="ui-btn-secondary recall-btn" @click="recallAction">{{ recallBar?.label }}</ElButton>
       </footer>
       <footer v-else-if="isMineActive" class="composer">
-        <div v-if="sendPreview" class="translate-preview">
-          <div class="preview-head">
-            <span class="preview-label">译成</span>
-            <ElSelect :model-value="previewTarget || translation.visitorLanguage" size="small" class="preview-lang" @change="changePreviewTarget">
-              <ElOption v-for="language in previewLanguages" :key="language" :label="language" :value="language" />
-            </ElSelect>
-            <span class="preview-tip">输入内容自动翻译</span>
-            <button type="button" class="use-preview" @click="usePreview">使用</button>
+        <div v-if="transPreviewVisible" class="trans-preview">
+          <div class="trans-lang">
+            <button
+              type="button"
+              class="trans-chip"
+              :class="{ 'is-open': langMenuOpen }"
+              aria-haspopup="listbox"
+              :aria-expanded="langMenuOpen"
+              aria-label="切换目标语种"
+              @click.stop="toggleLangMenu"
+            >{{ previewLanguageCode }}</button>
+            <div v-if="langMenuOpen" class="trans-lang-menu" role="listbox" aria-label="目标语种">
+              <button
+                v-for="language in previewLanguages"
+                :key="language"
+                type="button"
+                role="option"
+                class="trans-lang-option"
+                :class="{ 'is-selected': language === previewLanguage }"
+                :aria-selected="language === previewLanguage"
+                @click="selectPreviewLanguage(language)"
+              >
+                <span>{{ language }}</span>
+                <span class="trans-lang-check">{{ language === previewLanguage ? '✓' : '' }}</span>
+              </button>
+            </div>
           </div>
-          <p>{{ sendPreview.text }}</p>
+          <span v-if="autoPreview" class="trans-text">{{ autoPreview.text }}</span>
+          <span v-else class="trans-placeholder">翻译为...</span>
+          <div class="trans-actions">
+            <button v-if="autoPreview" type="button" class="trans-use" @click="usePreview">使用</button>
+            <button v-else type="button" class="trans-close" aria-label="关闭翻译预览" @click="dismissPreview">×</button>
+          </div>
         </div>
         <div class="composer-box" :class="{ 'is-disabled': !canSend }">
           <textarea
             v-model="input"
             class="composer-input"
             rows="3"
-            :placeholder="canSend ? '输入消息，Enter 发送，Shift + Enter 换行' : '当前渠道不可回复，历史消息仍可查看'"
+            :placeholder="canSend ? '输入自己熟悉语言' : '当前渠道不可回复，历史消息仍可查看'"
             :disabled="!canSend"
             @keydown.enter.exact.prevent="send"
           ></textarea>
@@ -1004,16 +1138,30 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
   background: transparent;
   border-right: 1px solid #ececed;
 }
-.list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 18px 18px 10px; }
-.list-head h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.list-head { display: flex; align-items: center; gap: 6px; box-sizing: border-box; min-height: 52px; padding: 0 16px; }
+.list-head h2 { margin: 0; color: var(--ui-ink); font-size: 17px; font-weight: 600; line-height: 24px; }
 .list-head-count { color: var(--ink-2); font-size: 13px; font-weight: 600; }
-.list-search { padding: 12px 16px 10px; border-bottom: 1px solid var(--line); }
-.list-search :deep(.el-input__wrapper) { min-height: 34px; }
-.ended-filter { display: grid; gap: 8px; padding: 10px 16px 12px; border-bottom: 1px solid var(--line); }
-.filter-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
-.filter-grid :deep(.el-select), .filter-grid :deep(.el-date-editor) { width: 100%; min-width: 0; }
-.filter-grid :deep(.el-select__wrapper), .filter-grid :deep(.el-input__wrapper) { min-height: 32px; }
+.list-filter-btn { position: relative; display: grid; place-items: center; width: 28px; height: 28px; margin-left: auto; padding: 0; color: var(--ink-2); cursor: pointer; background: transparent; border: 0; border-radius: 8px; transition: color 0.15s ease, background-color 0.15s ease; }
+.list-filter-btn:hover { color: var(--ink); background: var(--surface-muted); }
+.filter-icon { width: 14px; height: 14px; fill: currentColor; }
+.filter-count { position: absolute; top: -3px; right: -4px; display: grid; place-items: center; box-sizing: border-box; min-width: 15px; height: 15px; padding: 0 4px; color: #fff; font-size: 10px; font-weight: 600; line-height: 1; background: var(--info-ink); border-radius: 999px; }
+.list-search { padding: 0 16px 10px; }
+.list-search-input { width: 220px; }
+.list-search-input :deep(.el-input__wrapper) { min-height: 32px; }
 .clear-filters { justify-self: start; padding: 0; color: var(--info-ink); font: inherit; font-size: 11px; cursor: pointer; background: transparent; border: 0; }
+/* 筛选浮层由 ElPopover 挂到 body，样式需全局作用域 */
+:global(.inbox-filter-popper) { box-sizing: border-box; padding: 12px; border-radius: 12px; }
+:global(.inbox-filter-popper .list-filter-panel) { display: grid; gap: 6px; }
+:global(.inbox-filter-popper .filter-group-label) { margin-top: 2px; color: #8c8c8e; font-size: 11px; line-height: 16px; }
+:global(.inbox-filter-popper .filter-row) { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+:global(.inbox-filter-popper .filter-label) { flex: 0 0 auto; color: #62626d; font-size: 12px; }
+:global(.inbox-filter-popper .filter-control) { flex: 1 1 auto; min-width: 0; }
+:global(.inbox-filter-popper .filter-control .el-select__wrapper),
+:global(.inbox-filter-popper .filter-control .el-input__wrapper) { min-height: 30px; }
+:global(.inbox-filter-popper .filter-date) { width: 100%; }
+:global(.inbox-filter-popper .filter-footer) { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; padding-top: 8px; border-top: 1px solid #ececed; }
+:global(.inbox-filter-popper .filter-summary) { color: #8c8c8e; font-size: 11px; }
+:global(.inbox-filter-popper .clear-filters) { margin-left: auto; padding: 0; color: #0b4a82; font: inherit; font-size: 11px; cursor: pointer; background: transparent; border: 0; }
 .conv-list { display: flex; flex: 1; flex-direction: column; gap: 4px; min-height: 0; padding: 4px 6px 10px; overflow: auto; }
 .conv {
   display: flex;
@@ -1224,15 +1372,25 @@ a.attachment-name { text-decoration: underline; }
 .emoji-panel button { width: 30px; height: 30px; font-size: 17px; line-height: 1; cursor: pointer; background: transparent; border: 0; border-radius: 6px; }
 .emoji-panel button:hover { background: var(--surface-muted); }
 .hidden-file { display: none; }
-.translate-preview { margin-bottom: 8px; padding: 10px 12px; background: #f6f6f7; border: 1px solid var(--line); border-radius: 12px; }
-.preview-head { display: flex; align-items: center; gap: 8px; }
-.preview-label { color: var(--ink-2); font-size: 11px; }
-.preview-lang { width: 92px; }
-.preview-lang :deep(.el-select__wrapper) { min-height: 24px; padding: 0 8px; background: #fff; }
-.preview-tip { color: var(--ink-3); font-size: 10px; }
-.use-preview { margin-left: auto; padding: 2px 10px; color: var(--ink); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; background: #fff; border: 1px solid var(--line-strong); border-radius: 999px; }
-.use-preview:hover { background: var(--surface-muted); }
-.translate-preview p { margin: 8px 0 0; color: var(--ink-2); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+/* ---------- 发送翻译预览条（输入框正上方） ---------- */
+.trans-preview { display: flex; align-items: center; gap: 10px; box-sizing: border-box; min-height: 42px; margin-bottom: 8px; padding: 0 12px; background: #f6f6f7; border-radius: 12px; }
+.trans-lang { position: relative; flex: 0 0 auto; }
+.trans-chip { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 22px; padding: 0 7px; color: #131317; font: inherit; font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; background: #fff; border: 1px solid #e4e4e6; border-radius: 6px; transition: background-color 0.15s ease, border-color 0.15s ease; }
+.trans-chip:hover { background: #f2f4f8; border-color: #c2cad9; }
+.trans-chip.is-open { background: #eef1f7; border-color: #b9c4d8; }
+.trans-chip:focus-visible { outline: 2px solid #003fa4; outline-offset: 1px; }
+.trans-lang-menu { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 30; display: grid; gap: 2px; min-width: 148px; padding: 4px; background: #fff; border: 1px solid #e4e4e6; border-radius: 10px; box-shadow: 0 8px 24px rgb(19 19 23 / 12%); }
+.trans-lang-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 6px 8px; color: #131317; font: inherit; font-size: 13px; text-align: left; cursor: pointer; background: transparent; border: 0; border-radius: 6px; }
+.trans-lang-option:hover { background: #f3f4f6; }
+.trans-lang-option.is-selected { color: #003fa4; font-weight: 500; }
+.trans-lang-check { min-width: 12px; color: #003fa4; font-size: 12px; text-align: right; }
+.trans-text { flex: 1; min-width: 0; overflow: hidden; color: #131317; font-size: 13px; line-height: 18px; white-space: nowrap; text-overflow: ellipsis; }
+.trans-placeholder { flex: 1; min-width: 0; color: #8c8c8e; font-size: 13px; line-height: 18px; }
+.trans-actions { display: flex; flex: 0 0 auto; align-items: center; }
+.trans-use { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; color: #003fa4; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; background: transparent; border: 0; border-radius: 6px; }
+.trans-use:hover { background: #eef1f7; }
+.trans-close { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; color: #8c8c8e; font-size: 16px; line-height: 1; cursor: pointer; background: transparent; border: 0; border-radius: 6px; }
+.trans-close:hover { color: #131317; background: #ececee; }
 .takeover-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; box-sizing: border-box; padding: 16px 18px; border-top: 1px solid var(--line); }
 .takeover-copy { max-width: 64%; margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
 .takeover-btn { flex: 0 0 auto; min-width: 96px; }
