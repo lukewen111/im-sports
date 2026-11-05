@@ -1,0 +1,415 @@
+/**
+ * IM Support 全局视觉令牌
+ * 依据 docs/ui-visual-spec.md：中性灰画布 + 白卡片 + 近黑文字，无投影，靠灰阶差与 1px 细线分层。
+ * 本文件必须最先加载，后续页面样式只允许引用这里的变量，不再写裸色值。
+ */
+
+:root {
+  /* ---------- 表面与画布 ---------- */
+  --background: 0 0% 96.1%;            /* #F5F5F5 画布 */
+  --background-deep: 0 0% 96.1%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 6% 8%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 6% 8%;
+  --sidebar: 0 0% 96.1%;
+  --sidebar-deep: 0 0% 96.1%;
+  --header: 0 0% 96.1% !important;
+  --menu: 0 0% 96.1% !important;
+
+  /* ---------- 交互面 ---------- */
+  --secondary: 0 0% 93.7%;             /* #EEEEEF */
+  --secondary-foreground: 240 6% 8%;
+  --accent: 0 0% 90.2%;                /* #E6E6E7 控件面 */
+  --accent-foreground: 240 6% 8%;
+  --accent-hover: 0 0% 87.1%;
+  --accent-lighter: 0 0% 96.1%;
+  --accent-dark: 0 0% 85.5%;
+  --accent-darker: 0 0% 82.4%;
+  --heavy: 0 0% 85.5%;
+
+  /* ---------- 线与文字 ---------- */
+  --border: 0 0% 92.5%;                /* #ECECED */
+  --input: 240 2.5% 79.2%;             /* #C9C9CD 控件边 */
+  --input-background: 0 0% 100%;
+  --input-placeholder: 0 0% 61%;       /* #9A9AA0 */
+  --foreground: 240 6% 8%;             /* #131317 */
+  --primary-foreground: 0 0% 100%;
+  --ring: 240 6% 8%;
+
+  /* ---------- 页面可直接引用的语义变量 ---------- */
+  --ui-canvas: hsl(var(--background-deep));
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #eeeeef;
+  --ui-surface-control: #e6e6e7;
+  --ui-surface-selected: #d9d9da;
+  --ui-line: #ececed;
+  --ui-line-strong: #e2e2e3;
+  --ui-control-line: #c9c9cd;
+  --ui-ink: #131317;
+  --ui-ink-secondary: #62626d;
+  --ui-ink-muted: #8c8c8e;
+  --ui-ink-placeholder: #9a9aa0;
+  --ui-info-surface: #daedff;
+  --ui-info-ink: #0b4a82;
+  --ui-agent-surface: #f2f0fe;
+  --ui-warn-surface: #fee09b;
+  --ui-danger: #ca0005;
+  --ui-success: #1e9e5b;
+  --ui-switch-on: #2da44e;
+  --ui-amber: #d0810b;
+  --ui-accent-purple: #9e4eaa;
+  /* 蓝色 accent：仅用于描边按钮、链接、聚焦环与少量选中强调，不改 Element Plus 主色阶 */
+  --ui-accent: #003fa4;
+  --ui-accent-soft: rgb(0 63 164 / 6%);
+  --ui-accent-soft-strong: rgb(0 63 164 / 10%);
+  --ui-accent-ring: rgb(0 63 164 / 24%);
+
+  /* ---------- 尺寸刻度 ---------- */
+  --ui-radius-control: 8px;
+  --ui-radius-card: 16px;
+  --ui-header-height: 48px;
+  --ui-control-height: 36px;
+  --ui-row-height: 52px;
+
+  /* ---------- 字体 ---------- */
+  --font-family:
+    inter, -apple-system, blinkmacsystemfont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', 'Noto Sans SC', roboto, 'Helvetica Neue', arial,
+    sans-serif;
+
+  /* ---------- Element Plus 覆盖 ---------- */
+  --el-font-family: var(--font-family);
+  --el-font-size-base: 14px;
+  --el-font-size-small: 12px;
+  --el-component-size: 36px;
+  --el-component-size-small: 28px;
+  --el-component-size-large: 44px;
+  --el-border-radius-base: 8px !important;
+  --el-border-radius-small: 8px !important;
+  --el-border-radius-round: 999px !important;
+
+  /* 文字三级灰（use-design-tokens 会用行内样式写 regular，这里用 !important 抢回） */
+  --el-text-color-primary: #131317 !important;
+  --el-text-color-regular: #62626d !important;
+  --el-text-color-secondary: #8c8c8e !important;
+  --el-text-color-placeholder: #9a9aa0 !important;
+  --el-text-color-disabled: #b6b6ba !important;
+
+  /* 控件边界比卡片深一档 */
+  --el-border-color-darker: #c9c9cd;
+  --el-border-color-dark: #e2e2e3;
+  --el-input-border-color: #c9c9cd;
+  --el-input-hover-border-color: #8c8c8e;
+  --el-input-focus-border-color: #131317;
+  --el-input-bg-color: #ffffff;
+  --el-input-placeholder-color: #9a9aa0;
+
+  /* 表格：无表头底色、无竖线、行高 52、hover 极浅灰 */
+  --el-table-bg-color: #ffffff;
+  --el-table-tr-bg-color: #ffffff;
+  --el-table-expanded-cell-bg-color: #ffffff;
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: #62626d;
+  --el-table-text-color: #131317;
+  --el-table-border-color: #ececed;
+  --el-table-border: 1px solid #ececed;
+  --el-table-row-hover-bg-color: #f5f5f5;
+
+  /* 菜单（Element Plus 版本，Vben 菜单在 im-support.css 另行覆盖） */
+  --el-menu-bg-color: transparent;
+  --el-menu-hover-bg-color: #e6e6e7;
+  --el-menu-active-color: #131317;
+
+  /* 浮层 */
+  --el-dialog-border-radius: 16px;
+  --el-dialog-padding-primary: 20px;
+  --el-popover-border-radius: 12px;
+  --el-box-shadow-light: 0 8px 24px rgb(0 0 0 / 6%);
+
+  /* 开关 / 选择器：开启态统一绿色，关闭态中性灰 */
+  --el-switch-on-color: var(--ui-switch-on);
+  --el-switch-off-color: #c9c9cd;
+  --el-tag-border-radius: 999px;
+}
+
+/* ---------- 基础排版 ---------- */
+/* Vben 的 .light 主题块会在壳层元素上重新定义一遍变量，这里同源覆盖，避免顶栏/侧栏回退到自带灰蓝。 */
+.light,
+.light[data-theme='custom'],
+.light[data-theme='default'] {
+  --background: 0 0% 96.1%;
+  --background-deep: 0 0% 96.1%;
+  --foreground: 240 6% 8%;
+  --header: 0 0% 96.1%;
+  --sidebar: 0 0% 96.1%;
+  --sidebar-deep: 0 0% 96.1%;
+  --menu: 0 0% 96.1%;
+  --card: 0 0% 100%;
+  --popover: 0 0% 100%;
+  --border: 0 0% 92.5%;
+  --input: 240 2.5% 79.2%;
+  --accent: 0 0% 90.2%;
+}
+
+html,
+body {
+  font-family: var(--font-family);
+  color: var(--ui-ink);
+  background: var(--ui-canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
+}
+
+body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: 0;
+  color: var(--ui-ink);
+}
+
+/* ---------- Element Plus 细节 ---------- */
+.el-button {
+  font-weight: 500;
+}
+
+.el-button:not(.is-text, .is-link, .el-button--primary, .el-button--danger) {
+  --el-button-border-color: var(--ui-control-line);
+  --el-button-hover-border-color: var(--ui-ink);
+  --el-button-hover-text-color: var(--ui-ink);
+  --el-button-hover-bg-color: #ffffff;
+  --el-button-active-bg-color: var(--ui-surface-muted);
+  --el-button-active-border-color: var(--ui-ink);
+  background: #ffffff;
+}
+
+.el-button--primary:not(.is-plain, .is-text, .is-link) {
+  --el-button-hover-bg-color: #2b2b31;
+  --el-button-hover-border-color: #2b2b31;
+  --el-button-active-bg-color: #000000;
+  --el-button-active-border-color: #000000;
+}
+
+.el-button--primary.is-disabled,
+.el-button--primary.is-disabled:hover,
+.el-button--primary.is-disabled:focus {
+  color: #ffffff !important;
+  background: #d1d1d2 !important;
+  border-color: #d1d1d2 !important;
+}
+
+/* 危险操作仅用文字红，不做整块红底 */
+.el-button--danger:not(.is-plain, .is-text, .is-link) {
+  color: var(--ui-danger) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.el-button--danger:not(.is-plain, .is-text, .is-link, .is-disabled):hover {
+  color: var(--ui-danger) !important;
+  background: rgb(202 0 5 / 6%) !important;
+  border-color: transparent !important;
+}
+
+.el-button--danger.is-disabled,
+.el-button--danger.is-disabled:hover {
+  color: var(--ui-danger) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  opacity: 0.45;
+}
+
+.el-button.is-text:not(.is-disabled):hover {
+  background: var(--ui-surface-muted);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  border-radius: var(--ui-radius-control);
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--ui-accent) inset, 0 0 0 3px var(--ui-accent-ring) !important;
+}
+
+.el-form-item__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-ink-secondary);
+}
+
+.el-form-item.is-required:not(.is-no-asterisk) > .el-form-item__label::before {
+  color: var(--ui-ink-secondary);
+}
+
+.el-table {
+  font-size: 13px;
+}
+
+.el-table th.el-table__cell {
+  padding: 10px 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.el-table td.el-table__cell {
+  padding: 12px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.el-table__inner-wrapper::before {
+  display: none;
+}
+
+.el-table__empty-block {
+  min-height: 160px;
+}
+
+.el-table__empty-text {
+  color: var(--ui-ink-muted);
+  font-size: 13px;
+}
+
+.el-tag {
+  font-weight: 500;
+}
+
+.el-dialog {
+  --el-dialog-bg-color: #ffffff;
+  border-radius: var(--ui-radius-card);
+  overflow: hidden;
+}
+
+.el-dialog__header {
+  margin: 0;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.el-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ui-ink);
+}
+
+.el-dialog__headerbtn {
+  top: 8px;
+  right: 10px;
+}
+
+.el-dialog__body {
+  padding: 20px 24px;
+}
+
+.el-dialog__footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.el-dialog__footer .el-button + .el-button {
+  margin-left: 0;
+}
+
+.el-drawer {
+  --el-drawer-bg-color: #ffffff;
+}
+
+.el-drawer__header {
+  margin: 0;
+  padding: 16px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ui-ink);
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.el-drawer__body {
+  padding: 20px;
+}
+
+.el-drawer__footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--ui-line);
+}
+
+/* 开关开启态统一品牌绿：Element Plus 组件样式按需注入且晚于本文件，用双类选择器提升优先级覆盖其局部变量 */
+.el-switch.el-switch {
+  --el-switch-on-color: var(--ui-switch-on);
+  --el-switch-off-color: #c9c9cd;
+}
+
+.el-message,
+.el-message-box,
+.el-popper {
+  border-radius: 12px;
+}
+
+.el-message-box {
+  padding: 20px 24px;
+}
+
+.el-select-dropdown__item {
+  font-size: 13px;
+}
+
+.el-empty__description p {
+  color: var(--ui-ink-muted);
+  font-size: 13px;
+}
+
+.el-loading-mask {
+  background-color: rgb(255 255 255 / 72%);
+}
+
+/* ---------- 可见焦点与滚动条 ---------- */
+:where(a, button, [role='button'], [tabindex]):focus-visible {
+  outline: 2px solid var(--ui-accent-ring);
+  outline-offset: 2px;
+}
+
+.ui-link {
+  color: var(--ui-accent);
+  text-decoration: none;
+}
+
+.ui-link:hover {
+  text-decoration: underline;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d2d2d5 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d2d2d5;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b8b8bd;
+}

@@ -5,7 +5,7 @@ import { computed, ref } from 'vue';
 
 import { ElAvatar, ElCheckbox, ElMessage, ElOption, ElSelect, ElTabPane, ElTabs, ElTag } from 'element-plus';
 
-import { avatarColor, avatarText } from '#/features/team/team-constants';
+import { resolveProfileIdentity } from '../personal/profile-identity';
 
 const props = defineProps<{ lockedIds?: string[]; members: TeamMember[]; modelValue: string[] }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>();
@@ -21,6 +21,9 @@ const isLocked = (id: string) => props.lockedIds?.includes(id) ?? false;
 const disabledReason = (member: TeamMember) => isLocked(member.id) ? '已有成员不可取消' : (member.kind === 'ai' && selectedAiId.value && selectedAiId.value !== member.id ? '每个团队最多一名 AI 成员' : '');
 const isDisabled = (member: TeamMember) => Boolean(disabledReason(member));
 const selectableRows = computed(() => rows.value.filter((member) => !isDisabled(member)));
+const memberIdentity = (member: TeamMember) => resolveProfileIdentity({ avatar: member.avatar, id: member.id, name: member.name });
+const memberAvatarStyle = (member: TeamMember) => ({ backgroundColor: memberIdentity(member).avatarColor, color: '#fff' });
+const memberAvatarText = (member: TeamMember) => memberIdentity(member).initial || '—';
 const allChecked = computed(() => selectableRows.value.length > 0 && selectableRows.value.every((member) => props.modelValue.includes(member.id)));
 const indeterminate = computed(() => !allChecked.value && selectableRows.value.some((member) => props.modelValue.includes(member.id)));
 
@@ -67,7 +70,7 @@ function toggleAll(checked: boolean) {
     <ElSelect :model-value="modelValue" multiple filterable :filter-method="(value: string) => keyword = value" placeholder="请选择成员" popper-class="member-select-popper" @change="update">
       <template #tag>
         <ElTag v-for="member in selectedMembers.slice(0, 2)" :key="member.id" :closable="!isLocked(member.id)" disable-transitions class="member-select-tag" @close="removeMember(member.id)">
-          <ElAvatar :size="22" :src="member.avatar" :style="{ background: avatarColor(member.id) }">{{ avatarText(member.name, member.account) }}</ElAvatar><span>{{ member.name }}</span>
+          <ElAvatar :size="22" :src="member.avatar" :style="memberAvatarStyle(member)">{{ memberAvatarText(member) }}</ElAvatar><span>{{ member.name }}</span>
         </ElTag>
         <ElTag v-if="selectedMembers.length > 2" disable-transitions>+{{ selectedMembers.length - 2 }}</ElTag>
       </template>
@@ -78,7 +81,7 @@ function toggleAll(checked: boolean) {
       <ElOption v-for="member in rows" :key="member.id" :label="`${member.name} ${member.account || member.id}`" :value="member.id" :disabled="isDisabled(member)">
         <span class="member-select-option">
           <ElCheckbox :model-value="modelValue.includes(member.id)" :disabled="isDisabled(member)" @click.stop @change="(value) => toggleMember(member, Boolean(value))" />
-          <ElAvatar :size="36" :src="member.avatar" :style="{ background: avatarColor(member.id) }">{{ avatarText(member.name, member.account) }}</ElAvatar><span><b>{{ member.name }}</b><small>{{ member.account || member.id }}</small></span><small v-if="isDisabled(member)" class="member-select-disabled">{{ disabledReason(member) }}</small>
+          <ElAvatar :size="36" :src="member.avatar" :style="memberAvatarStyle(member)">{{ memberAvatarText(member) }}</ElAvatar><span><b>{{ member.name }}</b><small>{{ member.account || member.id }}</small></span><small v-if="isDisabled(member)" class="member-select-disabled">{{ disabledReason(member) }}</small>
         </span>
       </ElOption>
     </ElSelect>

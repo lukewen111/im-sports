@@ -1,19 +1,21 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 import type { Channel } from '#/features/channels/channel-data';
 
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { QiBell, QiBellOff, QiCharMinus, QiCharPlus, QiEmojiSmile, QiFile, QiRefresh2, QiSendRight } from 'qingicon-vue';
+import QIcon from '#/components/q-icon/QIcon.vue';
 
 import { foregroundForTheme } from '#/features/channels/channel-data';
 import { useChannelStore } from '#/features/channels/channel-store';
 import { useDemoServiceStore } from '#/features/service/demo-store';
+import { useTeamStore } from '#/features/team/team-store';
+import { formatChatTime } from '#/utils/chat-time';
 
 import WidgetGlyph from './WidgetGlyph.vue';
 
 type MessageKind = 'image' | 'text' | 'video';
-interface ClientMessage { content?: string; fileName?: string; fileSize?: number; fileUrl?: string; id: string; kind: MessageKind; role: 'agent' | 'customer'; sentAt: string }
+interface ClientMessage { content?: string; fileName?: string; fileSize?: number; fileUrl?: string; id: string; kind: MessageKind; role: 'agent' | 'customer' | 'system'; sentAt: string }
 interface PendingAttachment extends Omit<ClientMessage, 'role' | 'sentAt'> { error?: string; retryFile?: File; status: 'failed' | 'uploaded' | 'uploading'; uploadedAt: number }
 interface ClientCopy { missingDescription: string; missingTitle: string; placeholder: string; unavailable: string; welcome: string }
 interface ConversationMeta { channelName: string; createdAt: string; id: string; status: 'active' | 'ended'; teamId: string }
@@ -39,6 +41,7 @@ const CLIENT_COPY: Record<string, ClientCopy> = {
 const route = useRoute();
 const store = useChannelStore();
 const serviceStore = useDemoServiceStore();
+const team = useTeamStore();
 const isWidget = computed(() => route.name === 'ChannelWidget');
 const channel = computed<Channel | undefined>(() => isWidget.value
   ? store.channels.find((item) => item.id === String(route.params.channelId))
@@ -83,7 +86,24 @@ const teamAvailable = computed(() => {
   return Boolean(channel.value?.enabled && team?.status === 'active' && domainAllowed.value);
 });
 const copy = computed(() => resolveCopy(channel.value?.language, isWidget.value ? String(route.query.lang || '') : ''));
-const visibleMessages = computed(() => messages.value.slice(Math.max(0, messages.value.length - visibleCount.value)));
+const visitorSession = computed(() => conversationMeta.value ? serviceStore.sessionById(conversationMeta.value.id) : undefined);
+const systemMessages = computed<ClientMessage[]>(() => {
+  const session = visitorSession.value;
+  if (!session) return [];
+  return session.messages
+    .filter((message) => message.success && (message.eventType === 'pending' || message.eventType === 'assigned'))
+    .map((message) => ({
+      content: message.eventType === 'assigned'
+        ? `已分配给 ${(message.senderId ? team.memberById(message.senderId)?.name : undefined) || message.content.replace(/^已分配给\s*/, '')} · ${formatChatTime(message.sentAt)}`
+        : `进入待分配 · ${formatChatTime(message.sentAt)}`,
+      id: `visitor-event-${message.id}`,
+      kind: 'text' as const,
+      role: 'system' as const,
+      sentAt: message.sentAt,
+    }));
+});
+const timeline = computed(() => [...messages.value, ...systemMessages.value].sort((left, right) => +new Date(left.sentAt) - +new Date(right.sentAt)));
+const visibleTimeline = computed(() => timeline.value.slice(Math.max(0, timeline.value.length - visibleCount.value)));
 const widgetVisible = computed(() => isMobile.value ? channel.value?.widgetMobileVisible : channel.value?.widgetDesktopVisible);
 const widgetPosition = computed(() => isMobile.value ? (channel.value?.widgetMobilePosition || channel.value?.widgetPosition) : channel.value?.widgetPosition);
 const widgetStyle = computed(() => ({
@@ -130,7 +150,7 @@ function loadMessages() {
 function scrollToEnd(behavior: ScrollBehavior = 'auto') { nextTick(() => messageArea.value?.scrollTo({ behavior, top: messageArea.value.scrollHeight })); }
 function messageDate(sentAt: string) { const date = new Date(sentAt); return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`; }
 function showDate(index: number) {
-  const previous = visibleMessages.value[index - 1]; const current = visibleMessages.value[index];
+  const previous = visibleTimeline.value[index - 1]; const current = visibleTimeline.value[index];
   return index === 0 || !previous || !current || messageDate(previous.sentAt) !== messageDate(current.sentAt);
 }
 function fileKind(file: File): MessageKind {
@@ -242,7 +262,7 @@ function insertEmoji(emoji: string) {
 }
 function handleScroll() {
   const area = messageArea.value; if (!area) return;
-  if (area.scrollTop < 24 && visibleCount.value < messages.value.length) visibleCount.value = Math.min(messages.value.length, visibleCount.value + 40);
+  if (area.scrollTop < 24 && visibleCount.value < timeline.value.length) visibleCount.value = Math.min(timeline.value.length, visibleCount.value + 40);
   atBottom.value = area.scrollHeight - area.scrollTop - area.clientHeight < 24; if (atBottom.value) unread.value = 0;
 }
 function toggleMute() { muted.value = !muted.value; localStorage.setItem(`${MUTE_KEY}:${String(route.params.channelId)}`, String(muted.value)); }
@@ -293,13 +313,14 @@ onUnmounted(() => { document.body.classList.remove('channel-client-body'); docum
         <header>
           <span class="channel-client-avatar"><img v-if="channel.brandAvatar" :src="channel.brandAvatar" alt="" /><span v-else>{{ (channel.brandName || channel.name).slice(0, 1) }}</span></span>
           <span class="channel-client-brand"><strong>{{ channel.brandName || channel.name }}</strong><small v-if="channel.brandSignature">{{ channel.brandSignature }}</small></span>
-          <button type="button" :aria-label="muted ? '打开消息提示音' : '关闭消息提示音'" @click="toggleMute"><QiBell v-if="!muted" :size="20" /><QiBellOff v-else :size="20" /></button>
-          <button v-if="isWidget" type="button" aria-label="关闭聊天窗口" @click="toggleOpen"><QiCharMinus :size="20" /></button>
+          <button type="button" :aria-label="muted ? '打开消息提示音' : '关闭消息提示音'" @click="toggleMute"><QIcon v-if="!muted" name="bell" :size="20" /><QIcon v-else name="bell-off" :size="20" /></button>
+          <button v-if="isWidget" type="button" aria-label="关闭聊天窗口" @click="toggleOpen"><QIcon name="minus" :size="20" /></button>
         </header>
         <div ref="messageArea" class="channel-client-messages" @scroll="handleScroll">
-          <template v-for="(message, index) in visibleMessages" :key="message.id">
+          <template v-for="(message, index) in visibleTimeline" :key="message.id">
             <div v-if="showDate(index)" class="channel-client-date-divider"><span>{{ messageDate(message.sentAt) }}</span></div>
-            <div class="channel-client-message-row" :class="`is-${message.role}`">
+            <div v-if="message.role === 'system'" class="channel-client-system-event">{{ message.content }}</div>
+            <div v-else class="channel-client-message-row" :class="`is-${message.role}`">
 <div class="channel-client-message">
               <button v-if="message.kind === 'image'" type="button" class="client-message-image-button" @click="zoomImage = message.fileUrl || ''"><img class="client-message-image" :src="message.fileUrl" :alt="message.fileName" /></button>
               <span v-else-if="message.kind === 'video'" class="client-video-wrap"><video class="client-message-video" :src="message.fileUrl" controls></video><a :href="message.fileUrl" :download="message.fileName">下载视频</a></span>
@@ -310,17 +331,17 @@ onUnmounted(() => { document.body.classList.remove('channel-client-body'); docum
         </div>
         <button v-if="unread > 0" type="button" class="channel-client-new-messages" @click="scrollToEnd('smooth')">{{ unread }} 条新消息</button>
         <div class="channel-client-compose-status">
-          <div v-if="pendingAttachments.length > 0" class="channel-client-pending-files"><span v-for="attachment in pendingAttachments" :key="attachment.id" :class="`is-${attachment.status}`"><img v-if="attachment.kind === 'image' && attachment.fileUrl" :src="attachment.fileUrl" alt="" /><QiFile v-else :size="18" /><span><b :title="attachment.fileName">{{ attachment.fileName }}</b><small>{{ attachment.status === 'uploading' ? '上传中…' : attachment.status === 'failed' ? attachment.error : '已上传' }}</small></span><button v-if="attachment.status === 'failed'" type="button" :aria-label="`重试 ${attachment.fileName}`" @click="retryAttachment(attachment)"><QiRefresh2 :size="16" /></button><button type="button" :aria-label="`移除 ${attachment.fileName}`" @click="removeAttachment(attachment.id)"><QiCharMinus :size="16" /></button></span></div>
+          <div v-if="pendingAttachments.length > 0" class="channel-client-pending-files"><span v-for="attachment in pendingAttachments" :key="attachment.id" :class="`is-${attachment.status}`"><img v-if="attachment.kind === 'image' && attachment.fileUrl" :src="attachment.fileUrl" alt="" /><QIcon v-else name="file" :size="18" /><span><b :title="attachment.fileName">{{ attachment.fileName }}</b><small>{{ attachment.status === 'uploading' ? '上传中…' : attachment.status === 'failed' ? attachment.error : '已上传' }}</small></span><button v-if="attachment.status === 'failed'" type="button" :aria-label="`重试 ${attachment.fileName}`" @click="retryAttachment(attachment)"><QIcon name="refresh" :size="16" /></button><button type="button" :aria-label="`移除 ${attachment.fileName}`" @click="removeAttachment(attachment.id)"><QIcon name="minus" :size="16" /></button></span></div>
           <div v-if="sending" class="channel-client-send-state">正在发送…</div>
           <div v-if="error" class="channel-client-error">{{ error }}<button v-if="failedOutgoing.length > 0" type="button" @click="retry">重试</button></div>
         </div>
         <footer @dragover.prevent @drop.prevent="uploadFiles($event.dataTransfer?.files || null)">
-          <button type="button" aria-label="上传附件" :disabled="!teamAvailable || sending" @click="fileInput?.click()"><QiCharPlus :size="20" /></button>
+          <button type="button" aria-label="上传附件" :disabled="!teamAvailable || sending" @click="fileInput?.click()"><QIcon name="plus" :size="20" /></button>
           <input ref="fileInput" type="file" hidden multiple :accept="ACCEPT" @change="handleFileChange" />
-          <button type="button" class="channel-client-emoji-trigger" aria-label="插入表情" :disabled="!teamAvailable || sending" @click.stop="emojiOpen = !emojiOpen"><QiEmojiSmile :size="20" /></button>
+          <button type="button" class="channel-client-emoji-trigger" aria-label="插入表情" :disabled="!teamAvailable || sending" @click.stop="emojiOpen = !emojiOpen"><QIcon name="emoji" :size="20" /></button>
           <div v-if="emojiOpen" class="channel-client-emoji-picker" role="dialog" aria-label="选择表情"><button v-for="emoji in EMOJIS" :key="emoji" type="button" :aria-label="`插入表情 ${emoji}`" @click="insertEmoji(emoji)">{{ emoji }}</button></div>
           <textarea ref="textarea" v-model="input" rows="1" :disabled="!teamAvailable || sending" :placeholder="teamAvailable ? copy.placeholder : (domainAllowed ? copy.unavailable : '当前网站未获授权，无法使用客服')" @paste="uploadFiles($event.clipboardData?.files || null)" @keydown.enter.exact="handleInputEnter"></textarea>
-          <button type="button" class="is-send" aria-label="发送消息" :disabled="!teamAvailable || sending || (!input.trim() && pendingAttachments.length === 0)" @click="send"><QiSendRight :size="20" /></button>
+          <button type="button" class="is-send" aria-label="发送消息" :disabled="!teamAvailable || sending || (!input.trim() && pendingAttachments.length === 0)" @click="send"><QIcon name="send" :size="20" /></button>
         </footer>
       </section>
       <button v-if="isWidget && !open" type="button" class="channel-client-fab" :style="{ background: channel.themeColor, color: themeForeground }" aria-label="打开聊天窗口" @click="toggleOpen"><WidgetGlyph :type="channel.widgetIcon" :custom-icon="channel.widgetCustomIcon" /><b v-if="unread">{{ unread > 99 ? '99+' : unread }}</b></button>
@@ -333,4 +354,5 @@ onUnmounted(() => { document.body.classList.remove('channel-client-body'); docum
 <style scoped>
 :global(body.channel-client-body){min-width:0;margin:0}.channel-client-page,.channel-widget-host{width:100vw;min-height:100vh;color:#1d2129;background:#f5f7fb;font:14px/22px -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}.channel-client-page{display:grid}.channel-widget-host{position:relative;display:grid;place-items:center;overflow:hidden}.channel-widget-host-copy{display:grid;justify-items:center;gap:8px;color:#86909c}.channel-widget-host-copy strong{color:#1d2129;font-size:20px}.channel-widget-runtime{position:fixed;z-index:10;bottom:var(--offset-y,24px);display:grid;justify-items:end;gap:12px}.channel-widget-runtime.is-bottom-left{right:auto;left:var(--offset-x,24px);justify-items:start}.channel-widget-runtime.is-bottom-right{right:var(--offset-x,24px)}.channel-client-chat{position:relative;display:grid;width:min(388px,calc(100vw - 32px));height:min(620px,calc(100vh - 48px));grid-template-rows:auto minmax(0,1fr) auto auto;overflow:hidden;background:#fff;border-radius:16px;box-shadow:0 18px 48px rgb(29 33 41 / 18%);animation:channel-client-open 420ms cubic-bezier(.16,1,.3,1);transform-origin:bottom right}.channel-client-chat.is-page{width:100%;height:100vh;border-radius:0;box-shadow:none}.channel-client-chat>header{display:grid;min-height:76px;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px 16px;color:var(--client-foreground,#fff);background:var(--client-theme)}.channel-client-chat>header button,.channel-client-chat>footer button{display:grid;width:32px;height:32px;place-items:center;padding:0;color:inherit;background:transparent;border:0;border-radius:50%;cursor:pointer}.channel-client-chat button svg{width:20px;height:20px;fill:none;stroke:currentcolor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}.channel-client-avatar{display:grid;width:44px;height:44px;place-items:center;overflow:hidden;background:rgb(255 255 255 / 18%);border-radius:50%;font-weight:600}.channel-client-avatar img{display:block;width:100%;height:100%;object-fit:cover}.channel-client-brand{display:grid;min-width:0;gap:3px}.channel-client-brand strong,.channel-client-brand small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.channel-client-brand small{color:inherit;opacity:.72}.channel-client-messages{display:flex;min-height:0;flex-direction:column;gap:12px;overflow:auto;padding:16px}.channel-client-date-divider{display:grid;place-items:center;margin:4px 0;color:#86909c;font-size:12px}.channel-client-date-divider span{padding:2px 9px;background:#f2f3f5;border-radius:999px}.channel-client-message-row{display:flex;justify-content:flex-start}.channel-client-message-row.is-customer{justify-content:flex-end}.channel-client-message{width:fit-content;max-width:82%;padding:9px 12px;overflow-wrap:anywhere;background:#f2f3f5;border-radius:12px 12px 12px 3px}.channel-client-message-row.is-customer .channel-client-message{color:var(--client-foreground,#fff);background:var(--client-theme);border-radius:12px 12px 3px 12px}.client-message-image,.client-message-video{display:block;max-width:min(280px,100%);max-height:260px;border-radius:8px;object-fit:contain}.client-message-audio{display:block;width:min(260px,100%)}.channel-client-message.is-file{min-width:min(100%,252px);padding:0;background:transparent}.client-file-message{display:grid;grid-template-columns:56px minmax(0,1fr);align-items:center;gap:12px;padding:12px;color:#1d2129;background:#f2f3f5;border-radius:16px}.client-file-icon{display:grid;width:56px;height:56px;place-items:center;background:#e5e7eb;border-radius:12px}.client-file-message>span:last-child{display:grid;min-width:0;gap:4px}.client-file-message a{overflow:hidden;color:#1664ff;text-overflow:ellipsis;white-space:nowrap;font-weight:600;text-decoration:none}.client-file-message small{color:#4e5969}.channel-client-compose-status:empty{display:none}.channel-client-pending-files{display:flex;gap:8px;overflow-x:auto;padding:8px 12px;border-top:1px solid #e5e6eb}.channel-client-pending-files>span{display:grid;min-width:0;flex:0 1 180px;grid-template-columns:28px minmax(0,1fr) 20px;align-items:center;gap:6px;padding:5px 6px;background:#f2f3f5;border-radius:8px}.channel-client-pending-files img{width:28px;height:28px;object-fit:cover;border-radius:5px}.channel-client-pending-files svg{width:18px;height:18px;fill:none;stroke:currentcolor}.channel-client-pending-files b{overflow:hidden;font-size:12px;font-weight:500;text-overflow:ellipsis;white-space:nowrap}.channel-client-pending-files button{padding:0;color:#86909c;background:transparent;border:0;font-size:18px}.channel-client-error,.channel-client-send-state{padding:6px 16px;font-size:12px}.channel-client-error{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#f53f3f;background:#ffece8}.channel-client-send-state{color:#86909c;background:#f2f3f5}.channel-client-error button{min-height:24px;padding:0 8px;color:inherit;background:transparent;border:1px solid currentcolor;border-radius:4px}.channel-client-new-messages{position:absolute;z-index:2;bottom:76px;left:50%;min-height:30px;padding:0 12px;color:#1664ff;background:#fff;border:1px solid #1664ff;border-radius:16px;box-shadow:0 4px 14px rgb(29 33 41 / 14%);transform:translateX(-50%)}.channel-client-chat>footer{position:relative;display:grid;min-height:64px;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid #e5e6eb}.channel-client-chat>footer textarea{min-width:0;max-height:88px;resize:none;padding:8px 10px;color:#1d2129;background:#f2f3f5;border:1px solid transparent;border-radius:6px;font:inherit}.channel-client-chat>footer textarea:focus{border-color:#1664ff;outline:none}.channel-client-chat>footer button{color:#4e5969}.channel-client-chat>footer button.is-send{color:var(--client-foreground,#fff);background:var(--client-theme)}.channel-client-chat>footer button:disabled{opacity:.45;cursor:not-allowed}.channel-client-emoji-trigger{font-size:19px}.channel-client-emoji-picker{position:absolute;z-index:3;bottom:calc(100% + 8px);left:12px;display:grid;width:248px;grid-template-columns:repeat(8,1fr);gap:4px;padding:8px;background:#fff;border:1px solid #e5e6eb;border-radius:10px;box-shadow:0 18px 48px rgb(29 33 41 / 18%)}.channel-client-emoji-picker button{width:28px!important;height:28px!important;color:#1d2129!important;font-size:18px}.channel-client-fab{position:relative;display:grid;width:56px;height:56px;place-items:center;overflow:visible;padding:0;border:0;border-radius:50%;box-shadow:0 18px 48px rgb(29 33 41 / 18%);cursor:pointer}.channel-client-fab :deep(svg){width:24px;height:24px}.channel-client-fab>b{position:absolute;top:-5px;right:-5px;display:grid;min-width:20px;height:20px;place-items:center;padding:0 5px;color:#fff;background:#f53f3f;border:2px solid #fff;border-radius:10px;font-size:11px}.channel-client-state{display:grid;min-height:100vh;place-content:center;justify-items:center;gap:8px;color:#86909c}.channel-client-state strong{color:#1d2129;font-size:20px}@keyframes channel-client-open{from{opacity:0;transform:translateY(20px) scale(.92)}to{opacity:1;transform:none}}@media(max-width:767px){.channel-client-chat:not(.is-page){width:calc(100vw - 24px);height:calc(100vh - 96px)}}
 .client-message-image-button{display:block;padding:0;background:transparent;border:0;cursor:zoom-in}.client-video-wrap{display:grid;gap:4px}.client-video-wrap a{color:#1664ff;font-size:12px}.channel-client-pending-files>span{grid-template-columns:28px minmax(0,1fr) auto auto}.channel-client-pending-files>span>span{display:grid;min-width:0}.channel-client-pending-files small{overflow:hidden;color:#86909c;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.channel-client-pending-files .is-failed small{color:#f53f3f}.channel-client-image-viewer{position:fixed;z-index:100;inset:0;display:grid;width:100%;height:100%;place-items:center;padding:32px;background:rgb(0 0 0 / 72%);border:0;cursor:zoom-out}.channel-client-image-viewer img{max-width:100%;max-height:100%;object-fit:contain}
+.channel-client-system-event{display:grid;place-items:center;padding:2px 0;color:#86909c;font-size:12px;line-height:18px;text-align:center}
 </style>

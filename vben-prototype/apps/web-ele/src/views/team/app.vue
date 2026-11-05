@@ -28,17 +28,17 @@ import {
   ElTooltip,
   ElUpload,
 } from 'element-plus';
-import { QiArrowLeft, QiArrowUpBracket, QiCharPlus, QiChevronDown, QiChevronUp, QiCode, QiCopy, QiDeleteTrash, QiHeadAi, QiMore, QiShieldAi, QiUserGroup, QiWorkflowSquare } from 'qingicon-vue';
-
+import QIcon from '#/components/q-icon/QIcon.vue';
 import { useChannelStore } from '#/features/channels/channel-store';
 import { avatarColor, avatarText, DEFAULT_TEAM_ID } from '#/features/team/team-constants';
 import { useTeamStore } from '#/features/team/team-store';
+import { resolveProfileIdentity } from '../personal/profile-identity';
 
 import MemberSelectionPanel from './MemberSelectionPanel.vue';
 import TeamMultiSelect from './TeamMultiSelect.vue';
 import RoleConfiguration from './RoleConfiguration.vue';
 import { usePrototypeAccess } from '#/features/team/access-store';
-import { normalizeRoleId, roleName, roleRecords } from '#/features/team/role-catalog';
+import { findRole, normalizeRoleId, permissionsError, roleName, roleRecords } from '#/features/team/role-catalog';
 import { useRoleStore } from '#/features/team/role-store';
 
 type ViewKey = 'ai' | 'all' | 'human' | 'roles' | 'teams';
@@ -98,9 +98,11 @@ const pageTitle = computed(() => ({ ai: 'AI 成员', all: '全部人员', human:
 const detailTeam = computed(() => currentView.value === 'teams' && typeof route.query.detail === 'string' ? access.visibleTeams.find((team) => team.id === route.query.detail) : undefined);
 const detailMembers = computed(() => store.members.filter((member) => detailMemberIds.value.includes(member.id)));
 const detailDirty = computed(() => detailTeam.value ? JSON.stringify({ memberIds: detailMemberIds.value.toSorted(), name: detailName.value.trim() }) !== detailBaseline.value : false);
-const memberAvatarText = (member: Pick<TeamMember, 'account' | 'name'>) => avatarText(member.name, member.account);
-const memberAvatarStyle = (member: Pick<TeamMember, 'id'>) => ({ background: avatarColor(member.id) });
+const memberIdentity = (member: Pick<TeamMember, 'avatar' | 'id' | 'name'>) => resolveProfileIdentity({ avatar: member.avatar, id: member.id, name: member.name });
+const memberAvatarText = (member: Pick<TeamMember, 'avatar' | 'id' | 'name'>) => memberIdentity(member).initial || '—';
+const memberAvatarStyle = (member: Pick<TeamMember, 'avatar' | 'id' | 'name'>) => ({ backgroundColor: memberIdentity(member).avatarColor, color: '#fff' });
 const teamAvatarText = (team: Pick<TeamRecord, 'name'>) => avatarText(team.name);
+const teamAvatarStyle = (team: Pick<TeamRecord, 'id'> & { color?: string }) => ({ backgroundColor: team.color || avatarColor(team.id), color: '#fff' });
 const teamNames = (ids: string[]) => ids.map((id) => store.teamById(id)?.name).filter(Boolean).join('、');
 
 const filteredRows = computed<Array<TeamMember | TeamRecord>>(() => {
@@ -181,7 +183,13 @@ async function saveMember() {
   if (!editing.value) return;
   if (!access.canManageMember(editingOriginal.value, editing.value.kind)) return ElMessage.error('当前权限已变化，无法保存。');
   if (editing.value.teamIds.some((id) => !access.visibleTeams.some((team) => team.id === id))) return ElMessage.error('不能选择无权管理的团队。');
-  if (editing.value.kind === 'human' && editing.value.role !== 'Owner' && !roles.assignable.some((role) => role.id === editing.value?.role)) return ElMessage.error('不能分配此角色。');
+  const roleChanged = editing.value.kind === 'human' && normalizeRoleId(editing.value.role) !== normalizeRoleId(editingOriginal.value?.role || '');
+  if (roleChanged && editing.value.role !== 'Owner') {
+    if (!roles.assignable.some((role) => role.id === normalizeRoleId(editing.value?.role || ''))) return ElMessage.error('不能分配此角色。');
+    const role = findRole(editing.value.role);
+    const error = role ? permissionsError(role.permissions, access.permissions) : undefined;
+    if (error) return ElMessage.error('无权授予超出自身范围的权限');
+  }
   if (!access.isOwner && editing.value.id === access.currentId && (normalizeRoleId(editing.value.role) !== normalizeRoleId(access.current?.role || '') || JSON.stringify(editing.value.teamIds.toSorted()) !== JSON.stringify(access.current?.teamIds.toSorted()))) return ElMessage.error('不能修改自己的角色或团队归属。');
   if (editingOriginal.value?.kind === 'ai' && editingOriginal.value.online && !editing.value.online) {
     try {
@@ -480,7 +488,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
     <aside class="team-secondary-nav" aria-label="团队功能导航">
       <h2>团队</h2>
       <button v-if="access.permissions.humans || access.permissions.ai" type="button" class="secondary-nav-group" :aria-expanded="memberNavExpanded" @click="toggleMemberNav">
-        <span>成员</span><QiChevronUp v-if="memberNavExpanded" class="secondary-nav-chevron" :size="16" aria-hidden="true" /><QiChevronDown v-else class="secondary-nav-chevron" :size="16" aria-hidden="true" />
+        <span>成员</span><QIcon v-if="memberNavExpanded" class="secondary-nav-chevron" name="chevron-up" :size="16" aria-hidden="true" /><QIcon v-else class="secondary-nav-chevron" name="chevron-down" :size="16" aria-hidden="true" />
       </button>
       <div v-show="memberNavExpanded" class="secondary-nav-children">
         <button v-if="access.permissions.humans || access.permissions.ai" type="button" :class="{ active: currentView === 'all' }" @click="navigateTo('/team/members/all')"><span>全部人员</span><small>{{ access.visibleMembers.length }}</small></button>
@@ -494,27 +502,27 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
     <RoleConfiguration v-if="currentView === 'roles'" />
     <template v-else-if="detailTeam">
       <header class="team-page-header detail-header">
-        <ElButton text class="back-button" @click="closeTeamDetail"><QiArrowLeft :size="16" />返回</ElButton>
+        <ElButton class="ui-btn-outline back-button" @click="closeTeamDetail"><QIcon name="arrow-left" :size="16" />返回</ElButton>
       </header>
       <section class="team-detail">
         <div class="team-identity">
-          <span class="team-square large" :style="{ background: detailTeam.color }">{{ teamAvatarText(detailTeam) }}</span>
+          <span class="team-square large" :style="teamAvatarStyle(detailTeam)">{{ teamAvatarText(detailTeam) }}</span>
           <label><span>团队名称</span><ElInput v-model="detailName" maxlength="32" show-word-limit :disabled="detailTeam.system || !canEditDetail" /></label>
         </div>
         <div class="section-heading">
           <h2>{{ detailMembers.length }} 名成员</h2>
-          <ElButton v-if="canEditDetail" type="primary" @click="openMemberPicker(detailTeam)"><QiCharPlus :size="16" />添加成员</ElButton>
+          <ElButton v-if="canEditDetail" type="primary" @click="openMemberPicker(detailTeam)"><QIcon name="plus" :size="16" />添加成员</ElButton>
         </div>
         <ElInput v-model="keyword" clearable placeholder="搜索团队成员" class="team-search" />
-        <ElTable :data="detailMembers.filter((member) => `${member.name}${member.account || member.id}`.toLowerCase().includes(keyword.toLowerCase()))" empty-text="未找到符合条件的成员">
+        <div class="team-table-viewport"><ElTable height="100%" :data="detailMembers.filter((member) => `${member.name}${member.account || member.id}`.toLowerCase().includes(keyword.toLowerCase()))" class="ui-table" empty-text="未找到符合条件的成员">
           <ElTableColumn label="名称" min-width="300">
             <template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.name }}</b><small>{{ scope.row.account || scope.row.id }}</small></span></span></template>
           </ElTableColumn>
-          <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="type-tag" :class="scope.row.kind">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
-          <ElTableColumn label="在线状态" min-width="130"><template #default="scope"><span class="online" :class="{ off: !scope.row.online }">● {{ scope.row.online ? '在线' : '离线' }}</span></template></ElTableColumn>
-          <ElTableColumn v-if="canEditDetail" label="操作" width="100"><template #default="scope"><ElTooltip content="移除成员" placement="top"><ElButton text type="danger" class="member-remove-button" :aria-label="`移除 ${scope.row.name}`" @click="removeFromTeam(scope.row)"><QiDeleteTrash :size="17" /></ElButton></ElTooltip></template></ElTableColumn>
-        </ElTable>
-        <footer v-if="detailDirty" class="detail-action-bar"><ElButton @click="resetDetailDraft">取消</ElButton><ElButton type="primary" @click="saveTeamDetail">保存</ElButton></footer>
+          <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="ui-tag" :class="scope.row.kind === 'ai' ? 'is-outline is-ai' : 'is-neutral'">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
+          <ElTableColumn label="在线状态" min-width="130"><template #default="scope"><span class="online" :class="{ off: !scope.row.online }"><i class="status-dot" aria-hidden="true" />{{ scope.row.online ? '在线' : '离线' }}</span></template></ElTableColumn>
+          <ElTableColumn v-if="canEditDetail" label="操作" width="100"><template #default="scope"><ElTooltip content="移除成员" placement="top"><ElButton text type="danger" class="member-remove-button" :aria-label="`移除 ${scope.row.name}`" @click="removeFromTeam(scope.row)"><QIcon name="trash" :size="17" /></ElButton></ElTooltip></template></ElTableColumn>
+        </ElTable></div>
+        <footer v-if="detailDirty" class="detail-action-bar"><ElButton class="ui-btn-outline" @click="resetDetailDraft">取消</ElButton><ElButton type="primary" @click="saveTeamDetail">保存</ElButton></footer>
       </section>
     </template>
 
@@ -522,10 +530,10 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
       <header class="team-page-header">
         <h1>{{ pageTitle }}</h1>
         <ElDropdown v-if="currentView !== 'teams' && access.isAdmin && (access.permissions.humans || access.permissions.ai)" trigger="click" @command="addMember">
-          <ElButton type="primary"><QiCharPlus :size="16" />添加成员<QiChevronDown :size="14" /></ElButton>
+          <ElButton type="primary"><QIcon name="plus" :size="16" />添加成员<QIcon name="chevron-down" :size="14" /></ElButton>
           <template #dropdown><ElDropdownMenu><ElDropdownItem v-if="access.permissions.humans" command="human">人类成员</ElDropdownItem><ElDropdownItem v-if="access.permissions.ai" command="ai">AI 成员</ElDropdownItem></ElDropdownMenu></template>
         </ElDropdown>
-        <ElButton v-else-if="currentView === 'teams' && access.isAdmin && access.permissions.teams && access.permissions.teamScope === 'all'" type="primary" @click="openTeam()"><QiCharPlus :size="16" />新建团队</ElButton>
+        <ElButton v-else-if="currentView === 'teams' && access.isAdmin && access.permissions.teams && access.permissions.teamScope === 'all'" type="primary" @click="openTeam()"><QIcon name="plus" :size="16" />新建团队</ElButton>
       </header>
 
       <section class="team-content">
@@ -547,34 +555,34 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
             <ElSelect v-model="allFilters.role" clearable placeholder="角色"><ElOption v-if="access.isOwner" label="Owner" value="Owner" /><ElOption label="AI 成员" value="AI 成员" /><ElOption v-for="role in filterRoles" :key="role.id" :label="role.name" :value="role.id" /></ElSelect>
             <ElSelect v-model="allFilters.online" clearable placeholder="在线状态"><ElOption label="在线" value="true" /><ElOption label="离线" value="false" /></ElSelect>
           </template>
-          <ElButton v-if="currentView !== 'teams'" text @click="clearFilters">清除筛选</ElButton>
+          <ElButton v-if="currentView !== 'teams'" class="ui-btn-outline" @click="clearFilters">清除筛选</ElButton>
         </div>
 
-        <ElTable v-if="currentView !== 'teams'" :data="pagedRows" :empty-text="keyword ? '未找到符合条件的成员' : (currentView === 'ai' ? '暂无 AI 成员' : (currentView === 'human' ? '暂无人类成员' : '暂无成员'))">
+        <div class="team-table-viewport"><ElTable v-if="currentView !== 'teams'" height="100%" class="ui-table" :data="pagedRows" :empty-text="keyword ? '未找到符合条件的成员' : (currentView === 'ai' ? '暂无 AI 成员' : (currentView === 'human' ? '暂无人类成员' : '暂无成员'))">
           <ElTableColumn label="昵称" min-width="260"><template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.name }}</b><small>{{ scope.row.id }}</small></span></span></template></ElTableColumn>
-          <ElTableColumn label="角色" min-width="120"><template #default="scope">{{ roleName(scope.row.role) }}</template></ElTableColumn>
-          <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="type-tag" :class="scope.row.kind">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
+          <ElTableColumn label="角色" min-width="120"><template #default="scope"><span class="ui-tag" :class="scope.row.role === 'Owner' ? 'is-solid' : 'is-neutral'">{{ roleName(scope.row.role) }}</span></template></ElTableColumn>
+          <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="ui-tag" :class="scope.row.kind === 'ai' ? 'is-outline is-ai' : 'is-neutral'">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
           <ElTableColumn label="团队" min-width="220"><template #default="scope">{{ teamNames(scope.row.teamIds) }}</template></ElTableColumn>
           <ElTableColumn label="在线状态" min-width="190">
             <template #default="scope">
-              <span class="online" :class="{ off: !scope.row.online }">● {{ scope.row.online ? '在线' : '离线' }}</span>
-              <button v-if="scope.row.kind === 'ai' && access.canManageMember(scope.row)" type="button" class="status-action" :aria-label="scope.row.online ? `下线 ${scope.row.name}` : `上线 ${scope.row.name}`" :disabled="scope.row.exception === 'agent'" @click="toggleAi(scope.row)">{{ scope.row.online ? '↓' : '↑' }}</button>
-              <span v-if="scope.row.exception" class="exception">⚠ {{ scope.row.exception === 'connection' ? '连接异常' : scope.row.exception === 'authorization' ? '授权异常' : 'Agent 已失效' }}</span>
+              <span class="online" :class="{ off: !scope.row.online }"><i class="status-dot" aria-hidden="true" />{{ scope.row.online ? '在线' : '离线' }}</span>
+              <button v-if="scope.row.kind === 'ai' && access.canManageMember(scope.row)" type="button" class="status-action" :aria-label="scope.row.online ? `下线 ${scope.row.name}` : `上线 ${scope.row.name}`" :disabled="scope.row.exception === 'agent'" @click="toggleAi(scope.row)"><QIcon name="power" :size="15" /></button>
+              <span v-if="scope.row.exception" class="exception"><QIcon name="exclamation" :size="13" style="margin-right: 4px" />{{ scope.row.exception === 'connection' ? '连接异常' : scope.row.exception === 'authorization' ? '授权异常' : 'Agent 已失效' }}</span>
             </template>
           </ElTableColumn>
           <ElTableColumn label="启用" width="100"><template #default="scope"><ElSwitch v-if="scope.row.kind === 'human'" :model-value="scope.row.enabled" :disabled="!access.canManageMember(scope.row)" @change="(value) => toggleHuman(scope.row, Boolean(value))" /><span v-else>—</span></template></ElTableColumn>
           <ElTableColumn label="操作" width="100">
             <template #default="scope">
               <ElDropdown v-if="access.canManageMember(scope.row)" trigger="click">
-                <ElButton text type="primary" :aria-label="`${scope.row.name} 的更多操作`"><QiMore :size="20" /></ElButton>
+                <ElButton text type="primary" :aria-label="`${scope.row.name} 的更多操作`"><QIcon name="more" :size="20" /></ElButton>
                 <template #dropdown><ElDropdownMenu><ElDropdownItem @click="openMember(scope.row, scope.row.kind)">编辑</ElDropdownItem><ElDropdownItem v-if="scope.row.kind === 'human' && access.isOwner" @click="openReset(scope.row)">重置密码</ElDropdownItem><ElDropdownItem v-if="!scope.row.protected" divided @click="deleteMember(scope.row)">删除</ElDropdownItem></ElDropdownMenu></template>
               </ElDropdown>
             </template>
           </ElTableColumn>
         </ElTable>
 
-        <ElTable v-else :data="pagedRows" empty-text="暂无团队" class="team-list-table" @row-click="openTeamDetail">
-          <ElTableColumn label="名称" min-width="300"><template #default="scope"><button type="button" class="team-row" :aria-label="`编辑 ${scope.row.name}`" @click="openTeamDetail(scope.row)"><i :style="{ background: scope.row.color }">{{ teamAvatarText(scope.row) }}</i><span><b>{{ scope.row.name }}</b><small>{{ store.membersOf(scope.row.id).length }} 名成员</small></span></button></template></ElTableColumn>
+        <ElTable v-else height="100%" :data="pagedRows" empty-text="暂无团队" class="team-list-table" @row-click="openTeamDetail">
+          <ElTableColumn label="名称" min-width="300"><template #default="scope"><button type="button" class="team-row" :aria-label="`编辑 ${scope.row.name}`" @click="openTeamDetail(scope.row)"><i :style="teamAvatarStyle(scope.row)">{{ teamAvatarText(scope.row) }}</i><span><b>{{ scope.row.name }}</b><small>{{ store.membersOf(scope.row.id).length }} 名成员</small></span></button></template></ElTableColumn>
           <ElTableColumn label="ID" prop="id" min-width="160" />
           <ElTableColumn label="在线成员" min-width="130"><template #default="scope"><span class="metric">{{ store.membersOf(scope.row.id).filter((member) => member.online).length }}/{{ store.membersOf(scope.row.id).length }}</span></template></ElTableColumn>
           <ElTableColumn label="团队成员" min-width="240">
@@ -585,8 +593,8 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
               </ElPopover>
             </template>
           </ElTableColumn>
-          <ElTableColumn label="操作" width="96"><template #default="scope"><ElDropdown trigger="click" @click.stop><ElButton text type="primary" class="team-more-button" :aria-label="`${scope.row.name} 的更多操作`" @click.stop><QiMore :size="20" /></ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem @click="openTeamDetail(scope.row)">编辑</ElDropdownItem><ElDropdownItem v-if="!scope.row.system" divided class="team-delete-menu" @click="deleteTeam(scope.row)">删除</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
-        </ElTable>
+          <ElTableColumn label="操作" width="96"><template #default="scope"><ElDropdown trigger="click" @click.stop><ElButton text type="primary" class="team-more-button" :aria-label="`${scope.row.name} 的更多操作`" @click.stop><QIcon name="more" :size="20" /></ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem @click="openTeamDetail(scope.row)">编辑</ElDropdownItem><ElDropdownItem v-if="!scope.row.system" divided class="team-delete-menu" @click="deleteTeam(scope.row)">删除</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
+        </ElTable></div>
 
         <footer v-if="filteredRows.length > 0" class="table-footer"><span>共 {{ filteredRows.length }} 条</span><ElPagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" layout="sizes, prev, pager, next" :total="filteredRows.length" /></footer>
       </section>
@@ -594,22 +602,22 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
 
     <ElDialog v-model="methodDialog" title="添加 AI 员工" width="1080px" class="adam-method-dialog">
       <div class="ai-method-grid">
-      <section class="adam-card">
-        <div class="adam-card-heading"><span class="adam-mark"><img src="/adam-bot-icon.svg" alt="Adam Bot" /></span><div><div class="adam-title-row"><h2>Adam Bot 官方接入</h2><span class="official-tag">官方推荐</span></div><p>绑定 Adam Bot 账号后，即可使用已发布的 AI Agent 创建 AI 员工，加入团队参与客户接待。</p></div></div>
+      <section class="adam-card ui-card">
+        <div class="adam-card-heading"><span class="adam-mark"><img src="/adam-bot-icon.svg" alt="Adam Bot" /></span><div><div class="adam-title-row"><h2>Adam Bot 官方接入</h2><span class="ui-tag is-soft is-info">官方推荐</span></div><p>绑定 Adam Bot 账号后，即可使用已发布的 AI Agent 创建 AI 员工，加入团队参与客户接待。</p></div></div>
         <div class="adam-benefits">
-          <article><span><QiHeadAi :size="21" /></span><div><b>复用 AI Agent 能力</b><small>直接选择已发布的 AI Agent</small></div></article>
-          <article><span><QiWorkflowSquare :size="21" /></span><div><b>继承知识与工作流</b><small>沿用 Agent 已配置的能力体系</small></div></article>
-          <article><span><QiUserGroup :size="21" /></span><div><b>人机协同接待</b><small>与团队成员共同参与服务</small></div></article>
-          <article><span><QiShieldAi :size="21" /></span><div><b>官方授权接入</b><small>通过 Adam Bot 完成安全连接</small></div></article>
+          <article><span><QIcon name="ai-head" :size="21" /></span><div><b>复用 AI Agent 能力</b><small>直接选择已发布的 AI Agent</small></div></article>
+          <article><span><QIcon name="workflow" :size="21" /></span><div><b>继承知识与工作流</b><small>沿用 Agent 已配置的能力体系</small></div></article>
+          <article><span><QIcon name="team" :size="21" /></span><div><b>人机协同接待</b><small>与团队成员共同参与服务</small></div></article>
+          <article><span><QIcon name="shield" :size="21" /></span><div><b>官方授权接入</b><small>通过 Adam Bot 完成安全连接</small></div></article>
         </div>
         <footer class="adam-card-footer">
-          <template v-if="store.authorized"><span class="adam-bound"><span class="adam-account-avatar">{{ avatarText(store.authorization.accountName || store.authorization.tenantName) }}</span><span><small>已绑定 Adam Bot 账号</small><b>{{ store.authorization.accountName || store.authorization.tenantName }}</b></span></span><div><ElButton @click="unbindAdamBot">解绑</ElButton><ElButton type="primary" @click="chooseAdamBot">使用此方式</ElButton></div></template>
-          <template v-else-if="store.authorization.status === 'expired'"><span class="adam-bound"><span class="adam-account-avatar">{{ avatarText(store.authorization.accountName) }}</span><span><small>授权已过期</small><b>{{ store.authorization.accountName }}</b></span></span><div><ElButton @click="unbindAdamBot">解绑</ElButton><ElButton type="primary" @click="chooseAdamBot">重新授权</ElButton></div></template>
+          <template v-if="store.authorized"><span class="adam-bound"><span class="adam-account-avatar">{{ avatarText(store.authorization.accountName || store.authorization.tenantName) }}</span><span><small>已绑定 Adam Bot 账号</small><b>{{ store.authorization.accountName || store.authorization.tenantName }}</b></span></span><div><ElButton class="ui-btn-outline" @click="unbindAdamBot">解绑</ElButton><ElButton type="primary" @click="chooseAdamBot">使用此方式</ElButton></div></template>
+          <template v-else-if="store.authorization.status === 'expired'"><span class="adam-bound"><span class="adam-account-avatar">{{ avatarText(store.authorization.accountName) }}</span><span><small>授权已过期</small><b>{{ store.authorization.accountName }}</b></span></span><div><ElButton class="ui-btn-outline" @click="unbindAdamBot">解绑</ElButton><ElButton type="primary" @click="chooseAdamBot">重新授权</ElButton></div></template>
           <template v-else><span class="adam-unbound">尚未绑定 Adam Bot 账号</span><ElButton type="primary" @click="chooseAdamBot">使用此方式</ElButton></template>
         </footer>
       </section>
-      <section class="webhook-method-card">
-        <span class="webhook-method-icon"><QiCode :size="30" /></span>
+      <section class="webhook-method-card ui-card">
+        <span class="webhook-method-icon"><QIcon name="code" :size="30" /></span>
         <div><h2>自定义 Webhook 接入</h2><p>连接自建或第三方 AI 服务，将客户消息推送至你的接收地址。</p></div>
         <ElButton type="primary" plain @click="chooseWebhook">使用此方式</ElButton>
       </section>
@@ -627,7 +635,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
 
     <ElDrawer v-model="memberDrawer" :title="editingOriginal ? `编辑${editing?.kind === 'ai' ? ' AI 成员' : '人类成员'}` : `添加${editing?.kind === 'ai' ? ' AI 员工' : '人类成员'}`" size="560px" @closed="closeMemberDrawer">
       <ElForm v-if="editing" label-position="top" class="drawer-form">
-        <ElFormItem label="头像"><div class="avatar-uploader"><ElUpload :show-file-list="false" :auto-upload="false" accept="image/jpeg,image/png,image/webp" :on-change="uploadAvatar"><span class="avatar-upload-trigger" :class="{ uploaded: editing.avatar }"><img v-if="editing.avatar" :src="editing.avatar" alt="成员头像" /><QiArrowUpBracket v-else :size="30" /></span></ElUpload><small>{{ editing.avatar ? '点击头像可更换' : '点击上传头像' }}</small></div></ElFormItem>
+        <ElFormItem label="头像"><div class="avatar-uploader"><ElUpload :show-file-list="false" :auto-upload="false" accept="image/jpeg,image/png,image/webp" :on-change="uploadAvatar"><span class="avatar-upload-trigger" :class="{ uploaded: editing.avatar }"><img v-if="editing.avatar" :src="editing.avatar" alt="成员头像" /><QIcon v-else name="arrow-up-bracket" :size="30" /></span></ElUpload><small>{{ editing.avatar ? '点击头像可更换' : '点击上传头像' }}</small></div></ElFormItem>
         <template v-if="editing.kind === 'human'">
           <ElFormItem label="账号" required><ElInput v-model="editing.account" :disabled="Boolean(editingOriginal)" placeholder="请输入登录账号" /></ElFormItem>
           <ElFormItem label="昵称" required><ElInput v-model="editing.name" maxlength="32" show-word-limit @input="memberNameTouched = true" /></ElFormItem>
@@ -638,14 +646,14 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
           <ElFormItem label="用户状态"><ElSwitch v-model="editing.enabled" active-text="启用" inactive-text="停用" /></ElFormItem>
         </template>
         <template v-else>
-          <template v-if="editing.aiSource !== 'webhook'"><ElFormItem label="AI Agent" required><div class="agent-field"><ElSelect :model-value="editing.agentId" :disabled="!store.canUseAgentCatalog || store.agentListState !== 'ready'" placeholder="选择已发布 AI Agent" @change="chooseAgent"><ElOption v-for="agent in store.publishedAgents" :key="agent.id" :label="agent.name" :value="agent.id" /></ElSelect><ElButton v-if="store.agentListState === 'error'" text type="primary" @click="store.agentListState = 'ready'">AI Agent 列表加载失败，请重试</ElButton><span v-else-if="store.publishedAgents.length === 0" class="field-error">暂无已发布的 AI Agent，请先在 Adam Bot 发布。</span><span v-else-if="!store.canUseAgentCatalog" class="form-help">未绑定 Adam Bot，原 AI Agent 保持为空。</span></div></ElFormItem></template>
+          <template v-if="editing.aiSource !== 'webhook'"><ElFormItem label="AI Agent" required><div class="agent-field"><ElSelect :model-value="editing.agentId" :disabled="!store.canUseAgentCatalog || store.agentListState !== 'ready'" placeholder="选择已发布 AI Agent" @change="chooseAgent"><ElOption v-for="agent in store.publishedAgents" :key="agent.id" :label="agent.name" :value="agent.id" /></ElSelect><ElButton v-if="store.agentListState === 'error'" class="ui-btn-outline" @click="store.agentListState = 'ready'">AI Agent 列表加载失败，请重试</ElButton><span v-else-if="store.publishedAgents.length === 0" class="field-error">暂无已发布的 AI Agent，请先在 Adam Bot 发布。</span><span v-else-if="!store.canUseAgentCatalog" class="form-help">未绑定 Adam Bot，原 AI Agent 保持为空。</span></div></ElFormItem></template>
           <ElFormItem label="昵称" required><ElInput v-model="editing.name" maxlength="32" show-word-limit @input="memberNameTouched = true" /></ElFormItem>
           <ElFormItem label="团队" required><TeamMultiSelect v-model="editing.teamIds" :disabled-ids="disabledTeamIdsForMember" :teams="manageableTeams" /></ElFormItem>
           <ElFormItem label="在线状态"><ElSwitch v-model="editing.online" active-text="在线" inactive-text="离线" /></ElFormItem>
-          <template v-if="editing.aiSource === 'webhook'"><ElFormItem label="消息接收地址" required><ElInput v-model="editing.webhookUrl" placeholder="https://example.com/webhook/messages" /><span class="form-help">客户发送给该 AI 员工的消息将推送至此地址。</span></ElFormItem><ElFormItem label="消息回复地址"><div class="readonly-copy-field"><ElInput :model-value="webhookReplyUrl(editing.id)" disabled /><ElTooltip content="复制消息回复地址" placement="top"><ElButton text aria-label="复制消息回复地址" class="copy-field-button" @click="copyWebhookReplyUrl(editing.id)"><QiCopy :size="18" /></ElButton></ElTooltip></div></ElFormItem><ElFormItem label="AccessToken"><ElInput :model-value="editing.webhookToken" readonly /></ElFormItem></template>
+          <template v-if="editing.aiSource === 'webhook'"><ElFormItem label="消息接收地址" required><ElInput v-model="editing.webhookUrl" placeholder="https://example.com/webhook/messages" /><span class="form-help">客户发送给该 AI 员工的消息将推送至此地址。</span></ElFormItem><ElFormItem label="消息回复地址"><div class="readonly-copy-field"><ElInput :model-value="webhookReplyUrl(editing.id)" disabled /><ElTooltip content="复制消息回复地址" placement="top"><ElButton text aria-label="复制消息回复地址" class="copy-field-button" @click="copyWebhookReplyUrl(editing.id)"><QIcon name="copy" :size="18" /></ElButton></ElTooltip></div></ElFormItem><ElFormItem label="AccessToken"><ElInput :model-value="editing.webhookToken" readonly /></ElFormItem></template>
         </template>
       </ElForm>
-      <template #footer><ElButton @click="memberDrawer = false">取消</ElButton><ElButton type="primary" @click="saveMember">保存</ElButton></template>
+      <template #footer><ElButton class="ui-btn-outline" @click="memberDrawer = false">取消</ElButton><ElButton type="primary" @click="saveMember">保存</ElButton></template>
     </ElDrawer>
 
     <ElDialog v-model="teamDrawer" title="新建团队" width="760px" class="create-team-dialog">
@@ -653,7 +661,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
         <ElFormItem label="团队名称" required><ElInput v-model="editingTeam.name" maxlength="32" show-word-limit placeholder="请输入团队名称" /></ElFormItem>
         <ElFormItem label="选择成员" required><MemberSelectionPanel v-model="teamMemberIds" :members="store.members" /></ElFormItem>
       </ElForm>
-      <template #footer><ElButton @click="teamDrawer = false">取消</ElButton><ElButton type="primary" @click="saveTeam">保存</ElButton></template>
+      <template #footer><ElButton class="ui-btn-outline" @click="teamDrawer = false">取消</ElButton><ElButton type="primary" @click="saveTeam">保存</ElButton></template>
     </ElDialog>
 
     <ElDialog v-model="memberPickerDialog" title="添加成员" width="640px">

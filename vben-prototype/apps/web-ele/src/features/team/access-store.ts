@@ -15,7 +15,7 @@ export const usePrototypeAccess = defineStore('prototype-access', () => {
   const visibleTeams = computed(() => team.teams.filter((item) => permissions.value.teamScope === 'all' || current.value?.teamIds.includes(item.id)));
   const visibleMembers = computed(() => team.members.filter((member) => (member.kind === 'ai' ? permissions.value.ai : permissions.value.humans) && (permissions.value.teamScope === 'all' || member.teamIds.some((id) => current.value?.teamIds.includes(id)))));
   const teamEntry = computed(() => permissions.value.humans || permissions.value.ai ? '/team/members/all' : permissions.value.teams ? '/team/teams' : canManageRoles.value ? '/team/roles' : '');
-  const home = computed(() => permissions.value.assigned !== 'none' || permissions.value.pending ? '/inbox' : permissions.value.customers !== 'none' ? '/customers' : teamEntry.value || (permissions.value.channels ? '/channels' : permissions.value.settings ? '/reception' : '/personal'));
+  const home = computed(() => permissions.value.assigned !== 'none' || permissions.value.pending ? '/inbox' : permissions.value.customers !== 'none' ? '/customers' : teamEntry.value || (permissions.value.channels ? '/channels' : permissions.value.settings ? '/settings/reception/session' : '/personal'));
   function canManageMember(member?: TeamMember, kind: 'ai' | 'human' = 'human') {
     const feature = (member?.kind || kind) === 'ai' ? permissions.value.ai : permissions.value.humans;
     return Boolean(isAdmin.value && feature && (!member || (!member.protected || isOwner.value) && (permissions.value.teamScope === 'all' || member.teamIds.every((id) => current.value?.teamIds.includes(id)))));
@@ -32,6 +32,7 @@ export const usePrototypeAccess = defineStore('prototype-access', () => {
     if (path.startsWith('/channels')) return p.channels;
     if (path.startsWith('/inbox')) return p.assigned !== 'none' || p.pending;
     if (path.startsWith('/customers')) return p.customers !== 'none';
+    if (path.startsWith('/settings')) return p.settings;
     if (path.startsWith('/reception')) return p.settings;
     return true;
   }

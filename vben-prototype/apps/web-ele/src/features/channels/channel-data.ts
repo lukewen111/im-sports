@@ -1,3 +1,5 @@
+import { formatChatTime } from '#/utils/chat-time';
+
 import { DEFAULT_TEAM_ID, normalizeTeamId } from '../team/team-constants';
 
 export type ChannelType = 'chat-page' | 'telegram' | 'web-widget';
@@ -64,7 +66,7 @@ export function loadChannels(): Channel[] {
 export function persistChannels(channels: Channel[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(channels)); }
 export const saveChannels = persistChannels;
 export function createChannelDraft(type: ChannelType): Channel { const id = `channel-${type}-${Date.now()}`; const channel = normalizeChannel({ id, name: '', type }); if (type === 'chat-page') channel.chatPageUrl = `/chat/${channel.teamId}`; return channel; }
-export function formatDate(value: string) { return new Intl.DateTimeFormat('zh-CN', { day: '2-digit', hour: '2-digit', hour12: false, minute: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value)).replaceAll('/', '-'); }
+export function formatDate(value: string) { return formatChatTime(value); }
 export function countVisibleCharacters(value = '') {
   if (typeof Intl.Segmenter === 'function') return [...new Intl.Segmenter('zh-CN', { granularity: 'grapheme' }).segment(value)].length;
   return [...value].length;

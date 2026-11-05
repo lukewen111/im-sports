@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 import type { Channel, ChannelType } from '#/features/channels/channel-data';
 
 import { computed, reactive, ref, watch } from 'vue';
@@ -22,7 +22,8 @@ import {
   ElTableColumn,
   ElTag,
 } from 'element-plus';
-import { QiArrowLeft, QiCharPlus, QiSearch, QiSendRight } from 'qingicon-vue';
+import QIcon from '#/components/q-icon/QIcon.vue';
+import { formatChatTime } from '#/utils/chat-time';
 
 import {
   channelMeta,
@@ -123,18 +124,7 @@ function submitForm() {
 
   const value: Channel = {
     ...form,
-    createdAt:
-      form.createdAt ||
-      new Intl.DateTimeFormat('zh-CN', {
-        day: '2-digit',
-        hour: '2-digit',
-        hour12: false,
-        minute: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-      })
-        .format(new Date())
-        .replaceAll('/', '-'),
+    createdAt: form.createdAt || new Date().toISOString(),
     id: editingId.value ?? `channel-${Date.now()}`,
     name,
     websiteDomain: form.websiteDomain?.trim(),
@@ -206,7 +196,7 @@ function saveDetail() {
         <template v-if="detail">
           <header class="content-header detail-title">
             <div>
-              <ElButton text circle aria-label="返回列表" @click="detail = undefined"><QiArrowLeft :size="18" /></ElButton>
+              <ElButton text circle aria-label="返回列表" @click="detail = undefined"><QIcon name="arrow-left" :size="18" /></ElButton>
               <ChannelGlyph :type="detail.type" />
               <h2>{{ detail.name }}</h2>
             </div>
@@ -248,9 +238,9 @@ function saveDetail() {
               <h3>预览</h3>
               <div class="preview-stage">
                 <div class="preview-chat">
-                  <header :style="{ background: detail.themeColor }"><span>{{ detail.brandName.slice(0, 1) }}</span><div><strong>{{ detail.brandName }}</strong><small>{{ detail.brandSignature }}</small></div><button aria-label="关闭消息通知">♧</button><button aria-label="收起聊天窗口">—</button></header>
+                  <header :style="{ background: detail.themeColor }"><span>{{ detail.brandName.slice(0, 1) }}</span><div><strong>{{ detail.brandName }}</strong><small>{{ detail.brandSignature }}</small></div><button aria-label="关闭消息通知"><QIcon name="bell" :size="14" /></button><button aria-label="收起聊天窗口"><QIcon name="minus" :size="14" /></button></header>
                   <main><p>您好，请问有什么可以帮您？</p><p class="is-customer" :style="{ background: detail.themeColor }">我想查询订单状态。</p></main>
-                  <footer><button class="attach-button"><QiCharPlus :size="18" /></button><span>输入您的消息...</span><button class="send-button" :style="{ background: detail.themeColor }"><QiSendRight :size="18" /></button></footer>
+                  <footer><button class="attach-button"><QIcon name="plus" :size="18" /></button><span>输入您的消息...</span><button class="send-button" :style="{ background: detail.themeColor }"><QIcon name="send" :size="18" /></button></footer>
                 </div>
               </div>
             </aside>
@@ -269,13 +259,13 @@ function saveDetail() {
         </template>
 
         <template v-else>
-          <header class="content-header"><h2>{{ currentMeta?.label }}</h2><ElButton class="channel-add-button" type="primary" @click="openCreate()"><QiCharPlus :size="16" />{{ currentMeta?.addLabel }}</ElButton></header>
+          <header class="content-header"><h2>{{ currentMeta?.label }}</h2><ElButton class="channel-add-button" type="primary" @click="openCreate()"><QIcon name="plus" :size="16" />{{ currentMeta?.addLabel }}</ElButton></header>
           <div class="list-area">
-            <ElInput v-model="query" clearable class="channel-search" placeholder="搜索渠道名称"><template #prefix><QiSearch class="search-icon" :size="16" /></template></ElInput>
+            <ElInput v-model="query" clearable class="channel-search" placeholder="搜索渠道名称"><template #prefix><QIcon class="search-icon" name="search" :size="16" /></template></ElInput>
             <ElTable :data="filteredChannels" class="channel-table" empty-text="暂无渠道">
               <ElTableColumn label="渠道名称" min-width="260"><template #default="scope"><button class="channel-name" @click="openDetail(scope.row)"><ChannelGlyph :type="scope.row.type" /><span><strong>{{ scope.row.name }}</strong><small v-if="scope.row.websiteDomain">{{ scope.row.websiteDomain }}</small></span></button></template></ElTableColumn>
               <ElTableColumn label="接待 AI Agent" prop="agent" min-width="170" />
-              <ElTableColumn label="创建时间" prop="createdAt" min-width="170" />
+              <ElTableColumn label="创建时间" min-width="170"><template #default="scope">{{ formatChatTime(scope.row.createdAt) }}</template></ElTableColumn>
               <ElTableColumn label="状态" width="120"><template #default><ElTag type="success" round>已连接</ElTag></template></ElTableColumn>
               <ElTableColumn label="启用状态" width="120"><template #default="scope"><ElSwitch v-model="scope.row.enabled" /></template></ElTableColumn>
               <ElTableColumn label="操作" width="72"><template #default="scope"><ElDropdown trigger="click" @command="(command: string) => handleRowAction(command, scope.row)"><ElButton class="more-button" text aria-label="更多操作">···</ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem command="edit">编辑</ElDropdownItem><ElDropdownItem command="delete" divided>删除</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
@@ -353,8 +343,6 @@ function saveDetail() {
 .table-footer button { width: 32px; height: 32px; border: 0; border-radius: 4px; color: var(--channel-muted); background: transparent; }
 .table-footer button.active { color: var(--channel-primary); background: var(--channel-primary-bg); }
 .table-footer button:disabled { opacity: .45; }
-.channel-card :deep(.el-tag), .channel-table :deep(.el-tag) { height: 28px; padding: 0 12px; color: #2a814b; background: #e2f5eb; border: 0; font-size: 12px; font-weight: 500; }
-.channel-table :deep(.el-tag) { height: 24px; padding: 0 8px; }
 .channel-table :deep(.el-table__header th.el-table__cell) { height: 42px; color: var(--channel-foreground); background: #f2f3f5; font-weight: 600; }
 .channel-table :deep(.el-table__row td.el-table__cell) { height: 62px; color: var(--channel-text); }
 .channel-table :deep(.el-table__inner-wrapper::before) { display: none; }

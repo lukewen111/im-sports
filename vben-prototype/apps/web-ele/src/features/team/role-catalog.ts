@@ -57,7 +57,7 @@ export const roleName = (id: string) => findRole(id)?.name || id;
 export const scopeRank = (scope: DataScope) => ({ none: 0, self: 1, team: 2, all: 3 })[scope];
 export const permissionLabels = {
   pending: '待分配', takeover: '接管会话', transfer: '转接会话', end: '结束会话', recall: '回聊',
-  teams: '团队管理', humans: '人类成员', ai: 'AI 成员', channels: '渠道管理', settings: '聊天与接待',
+  teams: '团队管理', humans: '人类成员', ai: 'AI 成员', channels: '渠道', settings: '聊天与接待',
 } as const;
 export type BooleanPermission = keyof typeof permissionLabels;
 export function changePermission(p: RolePermissions, key: BooleanPermission | 'assigned' | 'customers', value: boolean | DataScope) {

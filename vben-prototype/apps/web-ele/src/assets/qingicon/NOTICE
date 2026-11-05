@@ -1,0 +1,24 @@
+QingIcon
+Copyright 2026 Asorn
+
+Local modifications: copied SVG files were changed only by replacing
+stroke="black" with stroke="currentColor" for theme compatibility, and a
+small number of additional icons were drawn in the same 24x24 style
+(stroke width 1.5px or 2px, currentColor only, no fill).
+
+Icons drawn in-house for this project (not derived from upstream QingIcon):
+- detail-collapse.svg, detail-expand.svg: 24x24 rounded panel glyphs with a
+  centre divider, 1.5px stroke
+
+This product includes icons made available under the Apache License,
+Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+
+Brand marks under brands/ are used only for identification purposes in this
+demo; all trademarks belong to their respective owners.
+
+Brand asset sources:
+- chrome.svg, edge.svg, firefox.svg, apple.svg, android.svg: Wikimedia Commons
+  (Google_Chrome_icon_(February_2022).svg, Microsoft_Edge_logo_(2019).svg,
+  Firefox_logo,_2019.svg, Apple_logo_black.svg, Android_robot.svg)
+- safari.svg, windows.svg: drawn in-house in the same flat style
+

@@ -1,0 +1,274 @@
+/* 标签与徽标样式层：四档层级（solid / outline / soft / neutral）。
+   只提供可复用的 class 与 Element Plus 标签映射，页面接入由后续任务逐页完成。
+   依赖 ui-theme.css 中的 --ui-* 令牌，不覆盖页面样式。 */
+
+:root {
+  /* ---------- 尺寸刻度（两档） ---------- */
+  --ui-tag-height: 24px;
+  --ui-tag-padding-x: 8px;
+  --ui-tag-radius: 12px;
+  --ui-tag-font-size: 12px;
+
+  /* ---------- 四档底色与字色 ---------- */
+  --ui-tag-solid-surface: var(--ui-ink);      /* #131317 */
+  --ui-tag-solid-ink: #ffffff;
+  --ui-tag-neutral-surface: var(--ui-surface-muted); /* #EEEEEF */
+  --ui-tag-neutral-ink: var(--ui-ink-secondary);     /* #62626D */
+  --ui-tag-outline-surface: #ffffff;
+
+  /* ---------- 语义色（soft 填充 / outline 描边共用） ---------- */
+  --ui-tag-info-surface: var(--ui-info-surface);     /* #DAEDFF */
+  --ui-tag-info-ink: var(--ui-info-ink);             /* #0B4A82 */
+  --ui-tag-ai-surface: var(--ui-agent-surface);      /* #F2F0FE */
+  --ui-tag-ai-ink: #7e3d8c;                          /* 对比度修正后的 AI 紫 */
+  --ui-tag-warn-surface: var(--ui-warn-surface);     /* #FEE09B */
+  --ui-tag-warn-ink: #7a5200;
+  --ui-tag-danger-surface: #fde7e7;
+  --ui-tag-danger-ink: var(--ui-danger);             /* #CA0005 */
+  --ui-tag-success-surface: #e4f6ec;
+  --ui-tag-success-ink: #187747;
+}
+
+/* ---------- 基础 ---------- */
+.ui-tag {
+  box-sizing: border-box;
+  display: inline-flex;
+  height: var(--ui-tag-height);
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 var(--ui-tag-padding-x);
+  color: var(--ui-tag-neutral-ink);
+  font-family: inherit;
+  font-size: var(--ui-tag-font-size);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  background: var(--ui-tag-neutral-surface);
+  border: 1px solid transparent;
+  border-radius: var(--ui-tag-radius);
+  box-shadow: none;
+}
+
+/* 小号：20 / 11 / 6 / 10 */
+.ui-tag.is-sm {
+  --ui-tag-height: 20px;
+  --ui-tag-padding-x: 6px;
+  --ui-tag-radius: 10px;
+  --ui-tag-font-size: 11px;
+}
+
+/* ---------- 四档 ---------- */
+/* 1. solid：身份 / 归属，全站一屏不超过 1–2 个 */
+.ui-tag.is-solid {
+  color: var(--ui-tag-solid-ink);
+  background: var(--ui-tag-solid-surface);
+  border-color: transparent;
+}
+
+/* 2. outline：类型 / 角色，白底 + 1px 描边 + 同色文字 */
+.ui-tag.is-outline {
+  color: var(--ui-ink);
+  background: var(--ui-tag-outline-surface);
+  border-color: var(--ui-control-line);
+}
+
+/* 3. soft：提示类，浅底 + 同色文字，无描边（默认掉落 neutral） */
+.ui-tag.is-soft {
+  color: var(--ui-tag-neutral-ink);
+  background: var(--ui-tag-neutral-surface);
+  border-color: transparent;
+}
+
+/* 4. neutral：普通状态、中性信息 */
+.ui-tag.is-neutral {
+  color: var(--ui-tag-neutral-ink);
+  background: var(--ui-tag-neutral-surface);
+  border-color: transparent;
+}
+
+/* ---------- 语义色：soft（默认语义类即 soft） ---------- */
+.ui-tag.is-info,
+.ui-tag.is-soft.is-info {
+  color: var(--ui-tag-info-ink);
+  background: var(--ui-tag-info-surface);
+  border-color: transparent;
+}
+
+.ui-tag.is-ai,
+.ui-tag.is-soft.is-ai {
+  color: var(--ui-tag-ai-ink);
+  background: var(--ui-tag-ai-surface);
+  border-color: transparent;
+}
+
+.ui-tag.is-warn,
+.ui-tag.is-soft.is-warn {
+  color: var(--ui-tag-warn-ink);
+  background: var(--ui-tag-warn-surface);
+  border-color: transparent;
+}
+
+.ui-tag.is-danger,
+.ui-tag.is-soft.is-danger {
+  color: var(--ui-tag-danger-ink);
+  background: var(--ui-tag-danger-surface);
+  border-color: transparent;
+}
+
+.ui-tag.is-success,
+.ui-tag.is-soft.is-success {
+  color: var(--ui-tag-success-ink);
+  background: var(--ui-tag-success-surface);
+  border-color: transparent;
+}
+
+/* ---------- 语义色：outline（白底 + 1px 同色系描边） ---------- */
+/* 品牌蓝只做描边与文字，不做填充 */
+.ui-tag.is-outline.is-info {
+  color: var(--ui-accent);
+  background: var(--ui-tag-outline-surface);
+  border-color: var(--ui-accent);
+}
+
+.ui-tag.is-outline.is-ai {
+  color: var(--ui-tag-ai-ink);
+  background: var(--ui-tag-outline-surface);
+  border-color: var(--ui-tag-ai-ink);
+}
+
+.ui-tag.is-outline.is-warn {
+  color: var(--ui-tag-warn-ink);
+  background: var(--ui-tag-outline-surface);
+  border-color: var(--ui-amber);
+}
+
+.ui-tag.is-outline.is-danger {
+  color: var(--ui-tag-danger-ink);
+  background: var(--ui-tag-outline-surface);
+  border-color: var(--ui-tag-danger-ink);
+}
+
+.ui-tag.is-outline.is-success {
+  color: var(--ui-tag-success-ink);
+  background: var(--ui-tag-outline-surface);
+  border-color: var(--ui-success);
+}
+
+/* 语义色：solid 仅保留语义底（不做发光/渐变），用于强归属 + 语义的组合 */
+.ui-tag.is-solid.is-danger {
+  color: #ffffff;
+  background: var(--ui-tag-danger-ink);
+  border-color: transparent;
+}
+
+/* ---------- 前置状态点（6px） ---------- */
+.ui-tag__dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--ui-tag-dot, currentcolor);
+  border-radius: 50%;
+}
+
+.ui-tag__dot.is-success { background: var(--ui-success); }
+.ui-tag__dot.is-warning { background: var(--ui-amber); }
+.ui-tag__dot.is-danger { background: var(--ui-danger); }
+.ui-tag__dot.is-muted { background: var(--ui-ink-muted); }
+
+/* ---------- Element Plus ElTag 映射 ---------- */
+/* 目标：默认标签收敛到 neutral，避免 EP 蓝色标签与自研标签两套观感。
+   EP 组件样式按需注入且可能晚于本文件，故用双类选择器提升优先级。 */
+.el-tag.el-tag {
+  --el-tag-bg-color: var(--ui-tag-neutral-surface);
+  --el-tag-border-color: transparent;
+  --el-tag-text-color: var(--ui-tag-neutral-ink);
+  --el-tag-hover-color: var(--ui-ink);
+
+  box-sizing: border-box;
+  display: inline-flex;
+  height: var(--ui-tag-height);
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--ui-tag-padding-x);
+  color: var(--el-tag-text-color);
+  font-family: inherit;
+  font-size: var(--ui-tag-font-size);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  background-color: var(--el-tag-bg-color);
+  border: 1px solid var(--el-tag-border-color);
+  border-radius: var(--ui-tag-radius);
+  box-shadow: none;
+}
+
+.el-tag.el-tag.is-round {
+  border-radius: var(--ui-tag-radius);
+}
+
+.el-tag.el-tag--small {
+  --ui-tag-height: 20px;
+  --ui-tag-padding-x: 6px;
+  --ui-tag-radius: 10px;
+  --ui-tag-font-size: 11px;
+  height: var(--ui-tag-height);
+  padding: 0 var(--ui-tag-padding-x);
+  font-size: var(--ui-tag-font-size);
+  border-radius: var(--ui-tag-radius);
+}
+
+.el-tag.el-tag .el-tag__content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+}
+
+.el-tag.el-tag .el-tag__close {
+  color: var(--ui-ink-muted);
+  background: transparent;
+}
+
+.el-tag.el-tag .el-tag__close:hover {
+  color: var(--ui-ink);
+  background: transparent;
+}
+
+/* 语义类型：统一收敛到 soft 档（浅底 + 同色文字 + 无描边） */
+.el-tag.el-tag--primary,
+.el-tag.el-tag--info {
+  --el-tag-bg-color: var(--ui-tag-neutral-surface);
+  --el-tag-text-color: var(--ui-tag-neutral-ink);
+  --el-tag-border-color: transparent;
+}
+
+.el-tag.el-tag--success {
+  --el-tag-bg-color: var(--ui-tag-success-surface);
+  --el-tag-text-color: var(--ui-tag-success-ink);
+  --el-tag-border-color: transparent;
+}
+
+.el-tag.el-tag--warning {
+  --el-tag-bg-color: var(--ui-tag-warn-surface);
+  --el-tag-text-color: var(--ui-tag-warn-ink);
+  --el-tag-border-color: transparent;
+}
+
+.el-tag.el-tag--danger {
+  --el-tag-bg-color: var(--ui-tag-danger-surface);
+  --el-tag-text-color: var(--ui-tag-danger-ink);
+  --el-tag-border-color: transparent;
+}
+
+/* 需要 solid 观感时显式加 ui-tag 的档位类，两者可叠加使用 */
+.el-tag.ui-tag.is-solid {
+  --el-tag-bg-color: var(--ui-tag-solid-surface);
+  --el-tag-text-color: var(--ui-tag-solid-ink);
+  --el-tag-border-color: transparent;
+}

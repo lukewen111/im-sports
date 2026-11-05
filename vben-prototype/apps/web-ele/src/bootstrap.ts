@@ -19,6 +19,9 @@ import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
 
+import './styles/ui-theme.css';
+import './styles/ui-components.css';
+import './styles/ui-tags.css';
 import './styles/im-support.css';
 import './styles/channel-source-parity.css';
 import './styles/team-module.css';

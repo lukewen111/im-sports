@@ -1,13 +1,546 @@
-<script setup lang="ts">
-import { computed, ref } from 'vue'; import { useRouter } from 'vue-router';
-import { ElButton, ElDrawer, ElInput, ElMessage, ElOption, ElSelect, ElTable, ElTableColumn } from 'element-plus';
-import { usePrototypeAccess } from '#/features/team/access-store'; import { useDemoServiceStore } from '#/features/service/demo-store'; import { useChannelStore } from '#/features/channels/channel-store'; import { useTeamStore } from '#/features/team/team-store';
-const access=usePrototypeAccess(),store=useDemoServiceStore(),channels=useChannelStore(),team=useTeamStore(),router=useRouter(); const keyword=ref(''),channelId=ref(''),teamIds=ref<string[]>([]),activeId=ref(''),edit=ref(false); const form=ref({remark:'',email:'',phone:''});
-const scopedSessions=computed(()=>store.sessions.filter(s=>access.permissions.customers==='all'||access.permissions.customers==='self'&&s.participants.includes(access.currentId)||access.permissions.customers==='team'&&access.current?.teamIds.includes(s.teamId)));
-const rows=computed(()=>store.customers.filter(c=>scopedSessions.value.some(s=>s.customerId===c.id)&&(!keyword.value||`${c.name}${c.id}${c.email}${c.phone}`.toLowerCase().includes(keyword.value.toLowerCase()))&&(!channelId.value||scopedSessions.value.some(s=>s.customerId===c.id&&s.channelId===channelId.value))&&(!teamIds.value.length||scopedSessions.value.some(s=>s.customerId===c.id&&teamIds.value.includes(s.teamId)))).sort((a,b)=>+new Date(b.lastActive)-+new Date(a.lastActive)));
-const current=computed(()=>store.customerById(activeId.value)); const customerSessions=computed(()=>store.sessions.filter(s=>s.customerId===activeId.value).sort((a,b)=>+new Date(b.createdAt)-+new Date(a.createdAt)));
-function open(id:string){activeId.value=id; const c=store.customerById(id)!;form.value={remark:c.remark,email:c.email,phone:c.phone};edit.value=false} function save(){const e=store.updateCustomer(activeId.value,form.value);if(e)ElMessage.error(e);else{edit.value=false;ElMessage.success('客户资料已保存')}}
-function action(){const unfinished=customerSessions.value.find(s=>s.status!=='ended');if(unfinished)return router.push(`/inbox?session=${unfinished.id}`);const ch=channels.channels[0];if(!ch)return ElMessage.error('暂无可用渠道');const r=store.recall(activeId.value,ch.id,access.currentId);if(r.error)return ElMessage.error(r.error);void router.push(`/inbox?session=${r.session?.id}`)}
+﻿<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
+import {
+  ElButton,
+  ElDatePicker,
+  ElInput,
+  ElMessage,
+  ElOption,
+  ElPagination,
+  ElSelect,
+  ElTable,
+  ElTableColumn,
+} from 'element-plus';
+
+import type { ChannelType } from '#/features/channels/channel-data';
+import type { DemoCustomer, DemoSession } from '#/features/service/demo-store';
+
+import { channelMeta } from '#/features/channels/channel-data';
+import { useChannelStore } from '#/features/channels/channel-store';
+import CustomerDetail from '#/features/customer-detail/CustomerDetail.vue';
+import { useDemoServiceStore } from '#/features/service/demo-store';
+import { usePrototypeAccess } from '#/features/team/access-store';
+import { formatChatTime } from '#/utils/chat-time';
+import type { ProfileIdentity } from '../personal/profile-identity';
+import { resolveProfileIdentity } from '../personal/profile-identity';
+
+const access = usePrototypeAccess();
+const store = useDemoServiceStore();
+const channels = useChannelStore();
+const router = useRouter();
+
+const keyword = ref('');
+const channelType = ref<ChannelType | ''>('');
+/** 渠道筛选顺序按 PRD 列举：网站小部件 → 聊天页面 → Telegram（「全部渠道」在最前） */
+const filterChannelTypes: ChannelType[] = ['web-widget', 'chat-page', 'telegram'];
+const teamIds = ref<string[]>(access.visibleTeams.map((item) => item.id));
+const dateRange = ref<[string, string] | null>(null);
+const page = ref(1);
+const pageSize = ref(20);
+const loading = ref(true);
+const tableArea = ref<HTMLElement>();
+const tableHeight = ref(0);
+let loadingTimer: ReturnType<typeof setTimeout> | undefined;
+let areaObserver: ResizeObserver | undefined;
+
+const activeId = ref('');
+const detailOpen = ref(true);
+const detailCollapsed = ref(false);
+const recallError = ref('');
+
+function customerIdentity(customer: Pick<DemoCustomer, 'avatar' | 'id' | 'name'>) {
+  return resolveProfileIdentity({ avatar: customer.avatar, id: customer.id, name: customer.name });
+}
+function avatarStyle(identity: ProfileIdentity) {
+  return { backgroundColor: identity.avatarColor, color: '#fff' };
+}
+
+// 仅管理员且拥有客户权限时可原位编辑（校验与保存由共享组件统一处理）
+const canEdit = computed(() => access.isAdmin && access.permissions.customers !== 'none');
+
+onMounted(() => {
+  loadingTimer = setTimeout(() => {
+    loading.value = false;
+  }, 350);
+  // 列表区固定高度：表内滚动，分页始终留在视口内
+  const area = tableArea.value;
+  if (area && typeof ResizeObserver !== 'undefined') {
+    const sync = () => {
+      tableHeight.value = Math.max(0, Math.floor(area.clientHeight));
+    };
+    areaObserver = new ResizeObserver(sync);
+    areaObserver.observe(area);
+    sync();
+  }
+});
+onBeforeUnmount(() => {
+  if (loadingTimer) clearTimeout(loadingTimer);
+  areaObserver?.disconnect();
+});
+
+watch(access.visibleTeams, (teams) => {
+  const ids = teams.map((item) => item.id);
+  const kept = teamIds.value.filter((id) => ids.includes(id));
+  teamIds.value = kept.length ? kept : ids;
+}, { deep: true });
+watch([keyword, channelType, teamIds, dateRange], () => {
+  page.value = 1;
+});
+watch(pageSize, () => {
+  page.value = 1;
+});
+
+const allSessionsOf = (customerId: string) => store.sessions.filter((session) => session.customerId === customerId);
+
+function inAssignedScope(session: DemoSession) {
+  const scope = access.permissions.assigned;
+  if (scope === 'all') return true;
+  if (scope === 'team') return Boolean(access.current?.teamIds.includes(session.teamId));
+  if (scope === 'self') return session.assigneeId === access.currentId || session.participants.includes(access.currentId);
+  return false;
+}
+function canViewSession(session: DemoSession) {
+  if (session.status === 'pending') return access.permissions.pending;
+  if (session.status === 'ended' && !session.everAssigned) return access.permissions.pending;
+  return access.permissions.assigned !== 'none' && inAssignedScope(session);
+}
+function customerInScope(customer: DemoCustomer) {
+  const scope = access.permissions.customers;
+  if (scope === 'all') return true;
+  if (scope === 'none') return false;
+  const sessions = allSessionsOf(customer.id);
+  if (scope === 'self') return sessions.some((session) => session.assigneeId === access.currentId || session.participants.includes(access.currentId));
+  return sessions.some((session) => access.current?.teamIds.includes(session.teamId));
+}
+
+function resolveChannelType(channelId?: string): ChannelType | undefined {
+  if (!channelId) return undefined;
+  return channels.channels.find((item) => item.id === channelId)?.type
+    || channels.deletedChannelSnapshots.find((item) => item.id === channelId)?.type;
+}
+/** 渠道筛选按关联会话聚合：该客户任意一条会话（channelId / originChannelId）命中即算匹配 */
+function customerChannelTypes(customer: DemoCustomer) {
+  const types = new Set<ChannelType>();
+  for (const session of allSessionsOf(customer.id)) {
+    const type = store.sessionChannelType(session) || resolveChannelType(session.originChannelId);
+    if (type) types.add(type);
+  }
+  return types;
+}
+
+const scopedCustomers = computed(() => store.customers.filter(customerInScope));
+const hasFilters = computed(() => Boolean(keyword.value.trim() || channelType.value || teamIds.value.length !== access.visibleTeams.length || dateRange.value?.length));
+const rows = computed(() => scopedCustomers.value
+  .filter((customer) => {
+    const text = keyword.value.trim().toLowerCase();
+    if (!text) return true;
+    return `${customer.name}${customer.id}${customer.email}${customer.phone}`.toLowerCase().includes(text);
+  })
+  .filter((customer) => (channelType.value ? customerChannelTypes(customer).has(channelType.value) : true))
+  .filter((customer) => (teamIds.value.length
+    ? allSessionsOf(customer.id).some((session) => teamIds.value.includes(session.teamId))
+    : true))
+  .filter((customer) => {
+    if (!dateRange.value?.length) return true;
+    const start = new Date(`${dateRange.value[0]}T00:00:00`).getTime();
+    const end = new Date(`${dateRange.value[1]}T23:59:59`).getTime();
+    const active = new Date(customer.lastActive).getTime();
+    return active >= start && active <= end;
+  })
+  .sort((left, right) => +new Date(right.lastActive) - +new Date(left.lastActive)));
+const pagedRows = computed(() => rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value));
+watch(rows, (list) => {
+  const maximum = Math.max(1, Math.ceil(list.length / pageSize.value));
+  if (page.value > maximum) page.value = maximum;
+});
+const emptyText = computed(() => {
+  if (!store.customers.length) return '暂无客户';
+  if (!scopedCustomers.value.length) return '当前数据范围内暂无客户';
+  return '未找到符合条件的客户';
+});
+
+const current = computed(() => store.customerById(activeId.value));
+const visit = computed(() => (current.value ? store.visitSummary(current.value.id) : undefined));
+const accepting = computed(() => Boolean(access.current?.online && store.settingsFor(access.currentId).accepting));
+
+function sessionCount(customerId: string) {
+  return store.sessions.filter((session) => session.customerId === customerId).length;
+}
+function unfinishedOf(customerId: string) {
+  return store.sessions.find((session) => session.customerId === customerId && session.status !== 'ended');
+}
+
+function open(id: string) {
+  if (activeId.value === id && current.value) return;
+  const customer = store.customerById(id);
+  if (!customer) return ElMessage.warning('客户不存在或已不可访问');
+  activeId.value = id;
+  detailOpen.value = true;
+  recallError.value = '';
+}
+function openRow(row: DemoCustomer) {
+  open(row.id);
+}
+
+function goChat(session: DemoSession) {
+  if (!canViewSession(session)) return ElMessage.warning('暂无权限查看该会话');
+  void router.push(`/inbox?session=${session.id}`);
+}
+function recallCustomer(customer: DemoCustomer) {
+  recallError.value = '';
+  if (!access.permissions.recall) {
+    recallError.value = '暂无权限发起回聊';
+    return ElMessage.warning(recallError.value);
+  }
+  if (!accepting.value) {
+    recallError.value = '请先开启接受聊天';
+    return ElMessage.warning(recallError.value);
+  }
+  const sourceChannelId = visit.value?.sourceChannelId || customer.sourceChannelId;
+  if (!sourceChannelId) {
+    recallError.value = '客户缺少原咨询渠道信息，无法回聊，也不会改用其他渠道。';
+    return ElMessage.error(recallError.value);
+  }
+  const result = store.recall(customer.id, sourceChannelId, access.currentId);
+  if (result.code === 'channel-deleted') {
+    recallError.value = `${result.error || '客户原咨询渠道已删除。'} 不会改用其他渠道创建会话。`;
+    return ElMessage.error(recallError.value);
+  }
+  if (result.error) {
+    recallError.value = result.error;
+    return ElMessage.error(result.error);
+  }
+  if (result.session) {
+    ElMessage.success('已按客户原渠道发起回聊');
+    void router.push(`/inbox?session=${result.session.id}`);
+  }
+}
+function primaryAction(customer: DemoCustomer) {
+  const unfinishedSession = unfinishedOf(customer.id);
+  if (unfinishedSession) return goChat(unfinishedSession);
+  recallCustomer(customer);
+}
+
+function openSession(session: DemoSession) {
+  // 无权条目按 PRD 只做灰显占位，不可点击
+  if (!canViewSession(session)) return;
+  void router.push(`/inbox?session=${session.id}`);
+}
+function resetFilters() {
+  keyword.value = '';
+  channelType.value = '';
+  teamIds.value = access.visibleTeams.map((item) => item.id);
+  dateRange.value = null;
+  page.value = 1;
+}
+function rowClassName({ row }: { row: DemoCustomer }) {
+  return row.id === activeId.value ? 'is-active' : '';
+}
 </script>
-<template><main class="customer-page"><header><h1>客户</h1></header><section><div class="toolbar"><ElInput v-model="keyword" clearable placeholder="搜索客户名称、ID、邮箱或电话"/><ElSelect v-model="channelId" clearable placeholder="渠道"><ElOption v-for="c in channels.channels" :key="c.id" :label="c.name" :value="c.id"/></ElSelect><ElSelect v-model="teamIds" clearable multiple collapse-tags placeholder="团队"><ElOption v-for="t in access.visibleTeams" :key="t.id" :label="t.name" :value="t.id"/></ElSelect><ElButton text @click="keyword='';channelId='';teamIds=[]">清除筛选</ElButton></div><ElTable :data="rows" @row-click="row=>open(row.id)"><ElTableColumn label="客户" min-width="230"><template #default="{row}"><b>{{row.name}}</b><small>{{row.id}}</small></template></ElTableColumn><ElTableColumn prop="email" label="邮箱" min-width="180"><template #default="{row}">{{row.email||'—'}}</template></ElTableColumn><ElTableColumn prop="phone" label="电话" min-width="150"><template #default="{row}">{{row.phone||'—'}}</template></ElTableColumn><ElTableColumn label="最近活跃" min-width="180"><template #default="{row}">{{new Date(row.lastActive).toLocaleString('zh-CN',{hour12:false})}}</template></ElTableColumn><ElTableColumn label="会话数" width="100"><template #default="{row}">{{store.sessions.filter(s=>s.customerId===row.id).length}}</template></ElTableColumn><ElTableColumn label="操作" width="100"><template #default="{row}"><ElButton link type="primary" @click.stop="open(row.id)">查看</ElButton></template></ElTableColumn></ElTable></section><ElDrawer :model-value="Boolean(current)" title="客户详情" size="520px" @close="activeId=''"> <template v-if="current"><h2>{{current.name}}</h2><p class="customer-id">{{current.id}}</p><div class="drawer-actions"><ElButton type="primary" :disabled="!access.permissions.recall" @click="action">{{customerSessions.some(s=>s.status!=='ended')?'去聊天':'回聊'}}</ElButton><ElButton v-if="access.isAdmin" @click="edit=true">编辑资料</ElButton></div><label>备注<ElInput v-model="form.remark" :disabled="!edit" type="textarea"/></label><label>邮箱<ElInput v-model="form.email" :disabled="!edit"/></label><label>电话<ElInput v-model="form.phone" :disabled="!edit"/></label><div v-if="edit" class="drawer-actions"><ElButton @click="edit=false">取消</ElButton><ElButton type="primary" @click="save">保存</ElButton></div><h3>近期会话</h3><button v-for="s in customerSessions.slice(0,3)" :key="s.id" class="recent" @click="router.push(`/inbox?session=${s.id}`)"><span>{{channels.channels.find(c=>c.id===s.channelId)?.name||'已删除渠道'}}</span><small>{{team.teamById(s.teamId)?.name}} · {{s.status==='ended'?'已结束':s.status==='pending'?'待分配':'进行中'}}</small></button></template></ElDrawer></main></template>
-<style scoped>.customer-page{padding:26px;background:#f4f6f8;min-height:calc(100vh - 70px)}header{margin-bottom:20px}h1{font-size:22px;font-weight:650}section{background:#fff;padding:24px;border-radius:10px}.toolbar{display:flex;gap:12px;margin-bottom:20px}.toolbar>.el-input{width:360px}.toolbar>.el-select{width:200px}td small{display:block;color:#87909f;margin-top:4px}.customer-id{color:#87909f}.drawer-actions{display:flex;gap:10px;margin:18px 0}label{display:block;margin:16px 0;color:#475569}label .el-input,label .el-textarea{margin-top:8px}h3{font-weight:650;margin:30px 0 10px}.recent{display:flex;width:100%;justify-content:space-between;padding:14px 0;border-bottom:1px solid #eee;text-align:left}.recent small{color:#87909f}</style>
+
+<template>
+  <main class="customer-page">
+    <div class="customer-layout" :class="{ 'has-detail': Boolean(current), 'is-collapsed': detailCollapsed }">
+      <section class="list-card">
+        <header class="card-head">
+          <h1>客户</h1>
+        </header>
+
+        <div class="toolbar">
+          <ElInput v-model="keyword" clearable placeholder="搜索客户名称、客户 ID、邮箱或手机号" class="search-input" />
+          <ElSelect v-model="channelType" clearable placeholder="全部渠道" class="type-select">
+            <ElOption label="全部渠道" value="" />
+            <ElOption v-for="type in filterChannelTypes" :key="type" :label="channelMeta[type].label" :value="type" />
+          </ElSelect>
+          <ElSelect v-model="teamIds" multiple collapse-tags collapse-tags-tooltip clearable placeholder="团队" class="team-select">
+            <ElOption v-for="item in access.visibleTeams" :key="item.id" :label="item.name" :value="item.id" />
+          </ElSelect>
+          <ElDatePicker
+            v-model="dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="最近活跃起"
+            end-placeholder="最近活跃止"
+            class="date-range"
+          />
+          <ElButton text class="clear-button" @click="resetFilters">清除筛选</ElButton>
+        </div>
+
+        <div ref="tableArea" class="table-area">
+        <ElTable
+          v-loading="loading"
+          :data="pagedRows"
+          :height="tableHeight || undefined"
+          :row-class-name="rowClassName"
+          @row-click="openRow"
+        >
+          <ElTableColumn label="客户" min-width="160">
+            <template #default="{ row }">
+              <div class="customer-cell">
+                <i class="avatar" :style="avatarStyle(customerIdentity(row))"><img v-if="customerIdentity(row).avatarUrl" :src="customerIdentity(row).avatarUrl" alt="" /><template v-else>{{ customerIdentity(row).initial }}</template></i>
+                <div>
+                  <b>{{ row.name }}</b>
+                  <small>{{ row.id }}</small>
+                </div>
+              </div>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn label="邮箱" min-width="104">
+            <template #default="{ row }">{{ row.email || '—' }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="手机号" min-width="92">
+            <template #default="{ row }">{{ row.phone || '—' }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="最近活跃" min-width="100">
+            <template #default="{ row }">{{ formatChatTime(row.lastActive) }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="会话数" width="62">
+            <template #default="{ row }">{{ sessionCount(row.id) }}</template>
+          </ElTableColumn>
+          <ElTableColumn label="操作" width="88" fixed="right">
+            <template #default="{ row }">
+              <div class="row-actions" @click.stop>
+                <ElButton class="ui-btn-outline row-action-btn" @click="primaryAction(row)">
+                  {{ unfinishedOf(row.id) ? '去聊天' : '回聊' }}
+                </ElButton>
+              </div>
+            </template>
+          </ElTableColumn>
+          <template #empty>
+            <div class="empty-state">
+              <p>{{ emptyText }}</p>
+              <ElButton v-if="hasFilters" text @click="resetFilters">清空筛选条件</ElButton>
+            </div>
+          </template>
+        </ElTable>
+        </div>
+
+        <div v-if="rows.length" class="table-foot">
+          <ElPagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :page-sizes="[10, 20, 50]"
+            :total="rows.length"
+            layout="total, sizes, prev, pager, next"
+          />
+        </div>
+      </section>
+
+      <CustomerDetail
+        v-if="current"
+        v-model:open="detailOpen"
+        v-model:collapsed="detailCollapsed"
+        class="detail-card"
+        :customer="current"
+        :editable="canEdit"
+        @select="openSession"
+      />
+    </div>
+  </main>
+</template>
+
+<style scoped>
+.customer-page {
+  --ink: #131317;
+  --ink-2: #62626d;
+  --ink-3: #8c8c8e;
+  --line: #ececed;
+  --canvas: #f5f5f5;
+  --control-line: #c9c9cd;
+  box-sizing: border-box;
+  display: flex;
+  height: calc(100vh - var(--ui-header-height, 48px));
+  min-height: 0;
+  padding: 0;
+  color: var(--ink);
+  background: var(--canvas);
+  font-size: 14px;
+}
+.customer-layout { display: grid; flex: 1; min-height: 0; gap: 12px; align-items: stretch; --detail-width: 380px; transition: grid-template-columns 0.24s ease; }
+.customer-layout.has-detail { grid-template-columns: minmax(0, 1fr) var(--detail-width); }
+.customer-layout.is-collapsed { --detail-width: 32px; }
+.list-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: 12px 0 12px 12px;
+  overflow: hidden;
+  background: #fff;
+  border: 0;
+  border-radius: 16px;
+}
+.customer-layout:not(.has-detail) .list-card { margin-right: 12px; }
+.detail-card {
+  position: sticky;
+  top: 12px;
+  align-self: start;
+  height: calc(100vh - var(--ui-header-height, 48px) - 24px);
+  max-height: calc(100vh - var(--ui-header-height, 48px) - 24px);
+  margin: 12px 12px 12px 0;
+  border: 0 !important;
+}
+.customer-layout.is-collapsed .detail-card { margin-right: 0; }
+
+.card-head {
+  display: flex;
+  flex: 0 0 48px;
+  height: 48px;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 16px 16px 0 0;
+}
+.card-head h1 { margin: 0; color: var(--ink); font-size: 16px; font-weight: 500; line-height: 24px; }
+
+.toolbar { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: 6px; align-items: center; padding: 12px 24px; }
+.search-input { flex: 1 1 160px; width: auto; min-width: 150px; }
+.type-select { flex: 0 0 104px; width: 104px; }
+.team-select { flex: 1 1 190px; width: auto; min-width: 190px; }
+.date-range { flex: 0 0 auto; }
+.toolbar :deep(.date-range) {
+  flex: 0 0 190px !important;
+  width: 190px !important;
+  min-width: 190px;
+  max-width: 190px;
+}
+.clear-button { margin-left: auto; color: var(--ink-2); font-size: 12px; }
+
+.toolbar :deep(.el-input__wrapper),
+.toolbar :deep(.el-select__wrapper),
+.toolbar :deep(.el-date-editor.el-input__wrapper) {
+  min-height: 32px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--control-line) inset;
+}
+.toolbar :deep(.el-input__wrapper.is-focus),
+.toolbar :deep(.el-select__wrapper.is-focused),
+.toolbar :deep(.el-date-editor.is-active) { box-shadow: 0 0 0 1px var(--ink) inset; }
+.toolbar :deep(.el-input__inner) { font-size: 13px; }
+.toolbar :deep(.el-date-editor .el-range-separator),
+.toolbar :deep(.el-date-editor .el-range-input) { font-size: 12px; }
+
+.table-area { flex: 1; min-height: 0; min-width: 0; padding: 0 24px; }
+
+.list-card :deep(.el-table) {
+  --el-table-border-color: var(--line);
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--ink-2);
+  --el-table-row-hover-bg-color: #f5f5f5;
+  --el-table-text-color: var(--ink);
+  font-size: 13px;
+}
+.list-card :deep(.el-table__inner-wrapper::before) { display: none; }
+.list-card :deep(.el-table tr),
+.list-card :deep(.el-table th.el-table__cell),
+.list-card :deep(.el-table td.el-table__cell) { background: transparent; }
+.list-card :deep(.el-table th.el-table__cell) {
+  height: 44px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--line);
+}
+.list-card :deep(.el-table td.el-table__cell) {
+  height: 52px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.list-card :deep(.el-table__row) { cursor: pointer; }
+.list-card :deep(.el-table__row.is-active td.el-table__cell) { background: #eeeeef; }
+.list-card :deep(.el-table .cell) { padding: 0 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* 操作列固定右侧：补不透明底色，横向滚动时不透明叠字 */
+.list-card :deep(.el-table-fixed-column--right) { background: #fff !important; }
+.list-card :deep(.el-table__row:hover > td.el-table-fixed-column--right) { background: #f5f5f5 !important; }
+.list-card :deep(.el-table__row.is-active > td.el-table-fixed-column--right) { background: #eeeeef !important; }
+
+.customer-cell { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.customer-cell b { display: block; overflow: hidden; font-size: 13px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.customer-cell small { display: block; margin-top: 2px; overflow: hidden; color: var(--ink-3); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.avatar {
+  display: grid;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  font-style: normal;
+  font-weight: 600;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.avatar.is-large { width: 40px; height: 40px; font-size: 15px; }
+.glyph-mini { display: inline-flex; flex: 0 0 auto; width: 24px; height: 24px; overflow: hidden; border-radius: 7px; }
+.glyph-mini :deep(.channel-glyph) { width: 24px; height: 24px; border: 0; background: #f5f5f5; transform: scale(0.8); transform-origin: center; }
+.glyph-mini :deep(.channel-glyph svg) { width: 16px; height: 16px; }
+
+.row-actions { display: flex; gap: 10px; align-items: center; }
+.row-actions .row-action-btn {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.table-foot { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 8px; padding: 12px 24px 16px; }
+.table-foot :deep(.el-pagination) { --el-pagination-font-size: 12px; --el-pagination-button-height: 28px; }
+.empty-state { padding: 36px 0 28px; color: var(--ink-3); font-size: 12px; }
+.empty-state p { margin: 0 0 6px; }
+.empty-state :deep(.el-button) { color: var(--ink); font-size: 12px; }
+
+.profile-grid { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px 12px; margin: 0; font-size: 12px; }
+.profile-grid dt { color: var(--ink-3); }
+.profile-grid dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.field-grid { display: grid; gap: 12px; }
+.field-grid label { display: grid; gap: 6px; color: var(--ink-2); font-size: 12px; }
+.field-grid :deep(.el-input__wrapper),
+.field-grid :deep(.el-textarea__inner) { border-radius: 8px; box-shadow: 0 0 0 1px var(--control-line) inset; }
+.field-grid :deep(.el-input.is-error .el-input__wrapper) { box-shadow: 0 0 0 1px #ca0005 inset; }
+.field-error { margin: 0; color: #ca0005; font-size: 11px; line-height: 1.4; }
+.edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.edit-actions :deep(.el-button) { height: 34px; border-radius: 8px; }
+.edit-actions :deep(.el-button--primary) { background: var(--ink); border-color: var(--ink); }
+
+.recent-list { display: grid; }
+.recent-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 10px 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+}
+.recent-item:last-child { border-bottom: 0; }
+.recent-main { display: grid; gap: 3px; min-width: 0; }
+.recent-main b { overflow: hidden; font-size: 12px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.recent-main b.expired { color: var(--ink-2); font-weight: 400; }
+.recent-main small { overflow: hidden; color: var(--ink-3); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; }
+.recent-item.is-locked { cursor: not-allowed; }
+.locked-text { color: var(--ink-3); font-size: 12px; }
+.load-more { justify-self: start; margin-top: 8px; color: var(--ink-2); font-size: 12px; }
+
+.visit-grid { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 9px 12px; margin: 0; padding: 12px 14px; font-size: 12px; background: #f7f7f8; border-radius: 12px; }
+.visit-grid dt { color: var(--ink-3); }
+.visit-grid dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.visit-grid dd.break { line-height: 1.45; word-break: break-all; }
+.visit-grid dd.mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 11px; }
+.muted { color: var(--ink-3); font-size: 11px; }
+
+@media (max-width: 1180px) {
+  .customer-layout.has-detail { grid-template-columns: minmax(0, 1fr) 340px; }
+}
+@media (max-width: 960px) {
+  .customer-layout.has-detail { grid-template-columns: minmax(0, 1fr); }
+  .detail-card { position: static; height: auto; max-height: none; margin: 0 12px 12px; }
+  .customer-layout.has-detail .list-card { margin-right: 12px; }
+}
+</style>

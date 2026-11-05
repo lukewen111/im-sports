@@ -17,7 +17,7 @@ export const overridesPreferences = defineOverridesPreferences({
     name: 'IM Support',
   },
   breadcrumb: {
-    enable: true,
+    enable: false,
     hideOnlyOne: false,
     showHome: false,
     showIcon: true,
@@ -26,7 +26,7 @@ export const overridesPreferences = defineOverridesPreferences({
     enable: false,
   },
   header: {
-    height: 70,
+    height: 48,
   },
   logo: {
     enable: true,
@@ -44,16 +44,20 @@ export const overridesPreferences = defineOverridesPreferences({
     // Vben 当前布局内部以 true 表示禁用鼠标进入后自动展开／离开收起。
     expandOnHover: true,
     fixedButton: false,
-    width: 224,
+    width: 208,
   },
   tabbar: {
     enable: false,
   },
   theme: {
-    colorPrimary: 'hsl(217 100% 54%)',
+    // 近黑主色（#131317），让 Element Plus 全色阶随之收敛，蓝色只保留为信息面。
+    colorDestructive: '#CA0005',
+    colorPrimary: 'hsl(240 6% 8%)',
+    colorSuccess: '#1E9E5B',
+    colorWarning: '#D0810B',
     fontSize: 14,
     mode: 'light',
-    radius: '0.5',
+    radius: '0.75',
   },
   widget: {
     fullscreen: true,

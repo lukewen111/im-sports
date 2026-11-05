@@ -1,9 +1,9 @@
-import type { RouteRecordRaw } from 'vue-router';
+﻿import type { RouteRecordRaw } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 
-import { QiAppsSquare, QiMessageSquareAi, QiPersonalization, QiRobot, QiUser, QiUserGroup } from 'qingicon-vue';
+import { qicon } from '#/components/q-icon/menu-icons';
 
 import { $t } from '#/locales';
 
@@ -51,43 +51,43 @@ const coreRoutes: RouteRecordRaw[] = [
     path: '/',
     redirect: preferences.app.defaultHomePath,
     children: [
-      { name: 'Inbox', path: 'inbox', component: () => import('#/views/inbox/app.vue'), meta: { icon: QiMessageSquareAi, title: '聊天' } },
-      { name: 'Customers', path: 'customers', component: () => import('#/views/customers/app.vue'), meta: { icon: QiUser, title: '客户' } },
+      { name: 'Inbox', path: 'inbox', component: () => import('#/views/inbox/app.vue'), meta: { icon: qicon('chat'), title: '聊天' } },
+      { name: 'Customers', path: 'customers', component: () => import('#/views/customers/app.vue'), meta: { icon: qicon('user'), title: '客户' } },
       {
         name: 'Team',
         path: 'team',
         redirect: '/team/members/all',
-        meta: { icon: QiUserGroup, title: '团队' },
+        meta: { icon: qicon('team'), title: '团队' },
         children: [
           {
             name: 'TeamRoles',
             path: 'roles',
             component: () => import('#/views/team/app.vue'),
-            meta: { icon: QiUserGroup, title: '角色配置' },
+            meta: { icon: qicon('team'), title: '角色配置' },
           },
           {
             name: 'TeamMembers',
             path: 'members',
             redirect: '/team/members/all',
-            meta: { icon: QiUserGroup, title: '成员' },
+            meta: { icon: qicon('team'), title: '成员' },
             children: [
               {
                 name: 'TeamAllMembers',
                 path: 'all',
                 component: () => import('#/views/team/app.vue'),
-                meta: { icon: QiUserGroup, title: '全部人员' },
+                meta: { icon: qicon('team'), title: '全部人员' },
               },
               {
                 name: 'TeamHumanMembers',
                 path: 'human',
                 component: () => import('#/views/team/app.vue'),
-                meta: { icon: QiUser, title: '人类成员' },
+                meta: { icon: qicon('user'), title: '人类成员' },
               },
               {
                 name: 'TeamAiMembers',
                 path: 'ai',
                 component: () => import('#/views/team/app.vue'),
-                meta: { icon: QiRobot, title: 'AI 成员' },
+                meta: { icon: qicon('robot'), title: 'AI 成员' },
               },
             ],
           },
@@ -95,7 +95,7 @@ const coreRoutes: RouteRecordRaw[] = [
             name: 'Teams',
             path: 'teams',
             component: () => import('#/views/team/app.vue'),
-            meta: { icon: QiUserGroup, title: '团队' },
+            meta: { icon: qicon('team'), title: '团队' },
           },
         ],
       },
@@ -105,12 +105,43 @@ const coreRoutes: RouteRecordRaw[] = [
         component: () => import('#/views/channels/app.vue'),
         meta: {
           affixTab: true,
-          icon: QiAppsSquare,
-          title: '渠道管理',
+          icon: qicon('channel'),
+          title: '渠道',
         },
       },
-      { name: 'Reception', path: 'reception', component: () => import('#/views/reception/app.vue'), meta: { icon: QiPersonalization, title: '聊天与接待' } },
-      { name: 'Personal', path: 'personal', component: () => import('#/views/personal/app.vue'), meta: { hideInMenu: true, icon: QiUser, title: '个人中心' } },
+      {
+        name: 'Settings',
+        path: 'settings',
+        redirect: '/settings/reception/session',
+        meta: { icon: qicon('settings'), title: '设置' },
+        children: [
+          {
+            name: 'SessionSettings',
+            path: 'reception/session',
+            component: () => import('#/views/settings/session/app.vue'),
+            meta: { icon: qicon('settings'), title: '会话设置' },
+          },
+          {
+            name: 'NotificationSettings',
+            path: 'reception/notification',
+            component: () => import('#/views/settings/notification/app.vue'),
+            meta: { icon: qicon('bell'), title: '消息通知' },
+          },
+          {
+            name: 'ChatTools',
+            path: 'reception/tools',
+            component: () => import('#/views/settings/tools/app.vue'),
+            meta: { icon: qicon('message-circle-text'), title: '聊天工具' },
+          },
+        ],
+      },
+      {
+        name: 'Reception',
+        path: 'reception',
+        redirect: '/settings/reception/session',
+        meta: { hideInMenu: true, hideInTab: true, title: '聊天与接待' },
+      },
+      { name: 'Personal', path: 'personal', component: () => import('#/views/personal/app.vue'), meta: { hideInMenu: true, icon: qicon('user'), title: '个人中心' } },
     ],
   },
   {

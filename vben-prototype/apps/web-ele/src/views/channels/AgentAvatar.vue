@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { Team } from '#/features/channels/channel-data';
 
-import { QiCharExclamationMark, QiRobot } from 'qingicon-vue';
+import QIcon from '#/components/q-icon/QIcon.vue';
 
 defineProps<{ agent?: Team }>();
 </script>
@@ -9,8 +9,8 @@ defineProps<{ agent?: Team }>();
 <template>
   <span class="agent-reference-avatar" :class="{ 'is-empty': !agent }">
     <img v-if="agent?.avatar" :src="agent.avatar" alt="" />
-    <QiRobot v-else-if="agent" :size="17" />
-    <QiCharExclamationMark v-else :size="17" />
+    <QIcon v-else-if="agent" name="robot" :size="17" />
+    <QIcon v-else name="exclamation" :size="17" />
   </span>
 </template>
 

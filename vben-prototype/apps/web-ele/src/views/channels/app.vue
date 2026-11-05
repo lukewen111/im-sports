@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 import type { InputInstance } from 'element-plus';
 
 import type { Channel, ChannelType } from '#/features/channels/channel-data';
@@ -8,15 +8,17 @@ import { onBeforeRouteLeave, useRoute } from 'vue-router';
 
 import {
   ElButton, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElForm, ElFormItem,
-  ElInput, ElInputNumber, ElMessage, ElMessageBox, ElSwitch, ElTable, ElTableColumn,
+  ElInput, ElInputNumber, ElMessage, ElMessageBox, ElPagination, ElSwitch, ElTable, ElTableColumn,
 } from 'element-plus';
-import { QiArrowLeft, QiBell, QiBellOff, QiCharMinus, QiCharPlus, QiCopy, QiEmojiSmile, QiSendRight } from 'qingicon-vue';
+import QIcon from '#/components/q-icon/QIcon.vue';
 
 import {
   channelMeta, channelTypes, countVisibleCharacters, createChannelDraft, domainsEquivalent, foregroundForTheme, formatDate, languages, parseDomain, truncateVisibleCharacters,
 } from '#/features/channels/channel-data';
 import { useChannelStore } from '#/features/channels/channel-store';
+import { formatChatTime } from '#/utils/chat-time';
 
+import { CHANNEL_DEMO_SEEDED_KEY, channelDemoChannels, channelDemoIds } from './channel-demo-data';
 import ChannelGlyph from './ChannelGlyph.vue';
 import ChannelOptionSelect from './ChannelOptionSelect.vue';
 import TeamAvatar from './TeamAvatar.vue';
@@ -32,7 +34,7 @@ const route = useRoute();
 const activeType = ref<Filter>('all');
 const query = ref('');
 const page = ref(1);
-const pageSize = 20;
+const pageSize = ref(20);
 const detailId = ref('');
 const detailSection = ref<DetailSection>('basic');
 const detailDraft = ref<Channel>();
@@ -105,8 +107,7 @@ const filtered = computed(() => {
     .filter((item) => item.type === activeType.value && (!term || item.name.toLowerCase().includes(term)))
     .toSorted((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 });
-const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)));
-const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize));
+const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value));
 const formTitle = computed(() => `${editingId.value ? '编辑' : '接入'} ${channelMeta[draft.type].label}`);
 const clientUrl = computed(() => detail.value ? `${window.location.origin}/${detail.value.type === 'chat-page' ? 'chat' : 'widget'}/${detail.value.type === 'chat-page' ? detail.value.teamId : detail.value.id}` : '');
 const origin = window.location.origin;
@@ -117,6 +118,15 @@ const formDirty = computed(() => JSON.stringify(draft) !== formBaseline.value);
 
 function cloneChannel(value: Channel) { return structuredClone(toRaw(value)); }
 function assignDraft(value: Channel) { Object.assign(draft, cloneChannel(value)); }
+function hydrateDemoChannels() {
+  if (!localStorage.getItem(CHANNEL_DEMO_SEEDED_KEY)) {
+    channelDemoChannels.forEach((channel) => store.save(structuredClone(channel)));
+    localStorage.setItem(CHANNEL_DEMO_SEEDED_KEY, '1');
+  }
+  const staleIds = store.channels.filter((channel) => channel.id.startsWith('demo-channel-') && !channelDemoIds.has(channel.id)).map((channel) => channel.id);
+  if (staleIds.length) store.channels = store.channels.filter((channel) => !staleIds.includes(channel.id));
+}
+hydrateDemoChannels();
 function resolvedPreviewLanguage(language = '自动') {
   if (language !== '自动') return language;
   const code = navigator.language.toLowerCase();
@@ -278,7 +288,7 @@ async function removeDomain(domain: string) {
 function sendMessage() {
   const content = previewInput.value.trim(); if (!content) return;
   if (countVisibleCharacters(content) > 2000) { ElMessage.warning('单条消息不能超过 2,000 个字符'); return; }
-  messages.value.push({ content, id: `message-${Date.now()}`, role: 'customer', time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) }); previewInput.value = '';
+  messages.value.push({ content, id: `message-${Date.now()}`, role: 'customer', time: formatChatTime(new Date()) }); previewInput.value = '';
 }
 function insertPreviewEmoji(emoji: string) {
   const input = previewInputRef.value?.input;
@@ -294,7 +304,7 @@ function sendPreviewAttachment(event: Event) {
   if (file.size > 20 * 1024 * 1024) { ElMessage.error('附件不能超过 20 MB'); return; }
   const allowed = new Set(['image/gif', 'image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm']);
   if (!allowed.has(file.type)) { ElMessage.error('仅支持 JPG、JPEG、PNG、WEBP、GIF、MP4、MOV、WEBM'); return; }
-  messages.value.push({ content: file.name, fileUrl: URL.createObjectURL(file), id: `preview-file-${Date.now()}`, kind: file.type.startsWith('image/') ? 'image' : 'video', role: 'customer', time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) });
+  messages.value.push({ content: file.name, fileUrl: URL.createObjectURL(file), id: `preview-file-${Date.now()}`, kind: file.type.startsWith('image/') ? 'image' : 'video', role: 'customer', time: formatChatTime(new Date()) });
   input.value = ''; ElMessage.success('文件已添加');
 }
 async function copy(value: string, label: string) {
@@ -348,11 +358,12 @@ onMounted(() => window.addEventListener('beforeunload', onBeforeUnload));
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload));
 watch(() => detail.value?.language, (language, previous) => { if (language && previous && language !== previous) resetPreviewMessages(); });
 watch(query, (value) => { const limited = truncateVisibleCharacters(value, 50); if (limited !== value) query.value = limited; });
+watch(pageSize, () => { page.value = 1; });
 </script>
 
 <template>
   <section class="channels-page">
-    <div v-if="!permissions.view" class="channel-access-denied"><strong>暂无渠道管理查看权限</strong><span>请联系管理员为当前角色开通渠道管理权限。</span></div>
+    <div v-if="!permissions.view" class="channel-access-denied"><strong>暂无渠道查看权限</strong><span>请联系管理员为当前角色开通渠道权限。</span></div>
     <div v-else class="channels-layout" :class="{ 'is-detail': detail }">
       <aside v-if="!detail" class="channels-subnav">
         <div class="channels-subnav-title">渠道</div>
@@ -360,10 +371,10 @@ watch(query, (value) => { const limited = truncateVisibleCharacters(value, 50); 
         <button v-for="type in channelTypes" :key="type" :class="{ active: activeType === type }" @click="setType(type)"><ChannelGlyph :type="type" />{{ channelMeta[type].label }}</button>
       </aside>
 
-      <main class="channels-main">
+      <main class="channels-main channels-content">
         <template v-if="detail">
           <header class="modern-channel-head">
-            <div><button class="icon-button back-button" aria-label="返回" @click="leaveDetail"><QiArrowLeft :size="20" /></button><ChannelGlyph :type="detail.type" /><h1>{{ detail.name }}</h1></div>
+            <div><button class="icon-button back-button" aria-label="返回" @click="leaveDetail"><QIcon name="arrow-left" :size="20" /></button><ChannelGlyph :type="detail.type" /><h1>{{ detail.name }}</h1></div>
             <div><ElButton v-if="detail.type === 'web-widget'" @click="installVisible = true"><span class="code-mark">&lt;/&gt;</span>安装代码</ElButton><span>{{ detail.enabled ? '已启用' : '已停用' }}</span><ElSwitch :model-value="detail.enabled" :disabled="!permissions.toggle" @change="(value) => toggle(detail!, Boolean(value))" /></div>
           </header>
           <div class="modern-channel-workspace">
@@ -383,12 +394,12 @@ watch(query, (value) => { const limited = truncateVisibleCharacters(value, 50); 
                 <ElFormItem label="接待团队"><ChannelOptionSelect v-if="detail.type !== 'chat-page'" v-model="detail.teamId" :disabled="!permissions.edit" :options="teamOptions" placeholder="选择接待团队" variant="team" /><div v-else class="readonly-team"><TeamAvatar :team="store.resolveTeam(detail.teamId)" />{{ store.resolveTeam(detail.teamId)?.name || '通用团队' }}</div></ElFormItem>
               </ElForm>
               <ElForm v-else-if="detailSection === 'appearance'" label-position="top">
-                <div class="brand-grid"><div><ElFormItem label="品牌名称"><ElInput v-model="detail.brandName" :disabled="!permissions.edit" /><span class="visible-count" :class="{ 'is-error': countVisibleCharacters(detail.brandName) > 50 }">{{ countVisibleCharacters(detail.brandName) }} / 50</span></ElFormItem><ElFormItem label="签名"><ElInput v-model="detail.brandSignature" :disabled="!permissions.edit" /><span class="visible-count" :class="{ 'is-error': countVisibleCharacters(detail.brandSignature) > 50 }">{{ countVisibleCharacters(detail.brandSignature) }} / 50</span></ElFormItem></div><ElFormItem label="品牌 LOGO"><div class="image-upload-group"><label class="image-upload" :class="{ 'is-disabled': !permissions.edit }"><img v-if="detail.brandAvatar" :src="detail.brandAvatar" alt="品牌 LOGO" /><QiCharPlus v-else :size="20" /><input type="file" accept=".jpg,.jpeg,.png,.webp" :disabled="!permissions.edit" @change="uploadImage($event, 'brandAvatar')" /></label><button v-if="detail.brandAvatar && permissions.edit" type="button" @click="clearImage('brandAvatar')">删除</button></div></ElFormItem></div>
+                <div class="brand-grid"><div><ElFormItem label="品牌名称"><ElInput v-model="detail.brandName" :disabled="!permissions.edit" /><span class="visible-count" :class="{ 'is-error': countVisibleCharacters(detail.brandName) > 50 }">{{ countVisibleCharacters(detail.brandName) }} / 50</span></ElFormItem><ElFormItem label="签名"><ElInput v-model="detail.brandSignature" :disabled="!permissions.edit" /><span class="visible-count" :class="{ 'is-error': countVisibleCharacters(detail.brandSignature) > 50 }">{{ countVisibleCharacters(detail.brandSignature) }} / 50</span></ElFormItem></div><ElFormItem label="品牌 LOGO"><div class="image-upload-group"><label class="image-upload" :class="{ 'is-disabled': !permissions.edit }"><img v-if="detail.brandAvatar" :src="detail.brandAvatar" alt="品牌 LOGO" /><QIcon v-else name="plus" :size="20" /><input type="file" accept=".jpg,.jpeg,.png,.webp" :disabled="!permissions.edit" @change="uploadImage($event, 'brandAvatar')" /></label><button v-if="detail.brandAvatar && permissions.edit" type="button" @click="clearImage('brandAvatar')" class="ui-btn-danger-text">删除</button></div></ElFormItem></div>
                 <ElFormItem label="主题色"><div class="color-control"><input v-model="detail.themeColor" class="native-color-input" type="color" aria-label="选择主题色" :disabled="!permissions.edit" /><ElInput v-model="detail.themeColor" :disabled="!permissions.edit" /></div></ElFormItem>
               </ElForm>
               <template v-else-if="detail.type === 'web-widget'">
-                <label class="field-label">允许域名</label><div class="domain-editor"><span v-for="domain in detail.allowedDomains" :key="domain">{{ domain }}<button v-if="permissions.edit" aria-label="移除域名" @click="removeDomain(domain)"><QiCharMinus :size="14" /></button></span><input v-model="domainInput" :disabled="!permissions.edit" placeholder="留空则所有域名可显示；输入后按 Enter 添加" @keydown.enter.prevent="addDomain" /></div>
-                <label class="field-label">悬浮按钮图标</label><div class="icon-picker"><label class="is-upload" :class="{ selected: detail.widgetIcon === 'custom', 'is-disabled': !permissions.edit }" aria-label="上传自定义图标"><WidgetGlyph v-if="detail.widgetIcon === 'custom' && detail.widgetCustomIcon" type="custom" :custom-icon="detail.widgetCustomIcon" /><QiCharPlus v-else :size="20" /><input type="file" accept=".jpg,.jpeg,.png,.webp" :disabled="!permissions.edit" @change="uploadImage($event, 'widgetCustomIcon')" /></label><button v-for="icon in ['message','message-dark','message-line'] as const" :key="icon" :disabled="!permissions.edit" :aria-label="icon === 'message' ? '默认消息图标' : icon === 'message-dark' ? '深色消息图标' : '文本消息图标'" :class="{ selected: detail.widgetIcon === icon }" @click="detail.widgetIcon = icon"><WidgetGlyph :type="icon" /></button></div><button v-if="detail.widgetCustomIcon && permissions.edit" class="restore-icon" type="button" @click="clearImage('widgetCustomIcon')">恢复默认图标</button>
+                <label class="field-label">允许域名</label><div class="domain-editor"><span v-for="domain in detail.allowedDomains" :key="domain">{{ domain }}<button v-if="permissions.edit" aria-label="移除域名" @click="removeDomain(domain)"><QIcon name="minus" :size="14" /></button></span><input v-model="domainInput" :disabled="!permissions.edit" placeholder="留空则所有域名可显示；输入后按 Enter 添加" @keydown.enter.prevent="addDomain" /></div>
+                <label class="field-label">悬浮按钮图标</label><div class="icon-picker"><label class="is-upload" :class="{ selected: detail.widgetIcon === 'custom', 'is-disabled': !permissions.edit }" aria-label="上传自定义图标"><WidgetGlyph v-if="detail.widgetIcon === 'custom' && detail.widgetCustomIcon" type="custom" :custom-icon="detail.widgetCustomIcon" /><QIcon v-else name="plus" :size="20" /><input type="file" accept=".jpg,.jpeg,.png,.webp" :disabled="!permissions.edit" @change="uploadImage($event, 'widgetCustomIcon')" /></label><button v-for="icon in ['message','message-dark','message-line'] as const" :key="icon" :disabled="!permissions.edit" :aria-label="icon === 'message' ? '默认消息图标' : icon === 'message-dark' ? '深色消息图标' : '文本消息图标'" :class="{ selected: detail.widgetIcon === icon }" @click="detail.widgetIcon = icon"><WidgetGlyph :type="icon" /></button></div><button v-if="detail.widgetCustomIcon && permissions.edit" class="restore-icon ui-btn-outline" type="button" @click="clearImage('widgetCustomIcon')">恢复默认图标</button>
                 <div class="device-tabs"><button :class="{ active: device === 'desktop' }" @click="device = 'desktop'"><span class="device-desktop-icon"></span>桌面端</button><button :class="{ active: device === 'mobile' }" @click="device = 'mobile'"><span class="device-mobile-icon"></span>移动端</button></div>
                 <div class="device-settings">
 <div class="setting-row"><div><strong>展示</strong><small>控制网站小部件是否在{{ device === 'desktop' ? '桌面端' : '移动端' }}显示</small></div><ElSwitch v-if="device === 'desktop'" v-model="detail.widgetDesktopVisible" :disabled="!permissions.edit" /><ElSwitch v-else v-model="detail.widgetMobileVisible" :disabled="!permissions.edit" /></div>
@@ -399,16 +410,16 @@ watch(query, (value) => { const limited = truncateVisibleCharacters(value, 50); 
               <div v-else-if="detail.type === 'chat-page'" class="link-card"><label>聊天页面 URL</label><div><ElInput :model-value="clientUrl" readonly /><ElButton @click="copy(clientUrl, '聊天页面链接')">复制</ElButton></div><ElButton @click="openClient">打开聊天页面</ElButton></div>
                 <div v-else class="telegram-info"><strong>Telegram Bot</strong><p>通过 Bot Token 接收 Telegram 客户消息。Token 更新后保存即可重新连接。</p><span class="connected-dot">已连接</span></div>
               </section>
-              <footer v-if="permissions.edit" class="config-actions"><ElButton :disabled="!dirty" @click="cancelSection">取消</ElButton><ElButton type="primary" :disabled="!dirty" @click="saveDetail">保存</ElButton></footer>
+              <footer v-if="permissions.edit" class="config-actions"><ElButton class="ui-btn-outline" :disabled="!dirty" @click="cancelSection">取消</ElButton><ElButton type="primary" :disabled="!dirty" @click="saveDetail">保存</ElButton></footer>
             </section>
             <aside class="modern-channel-preview">
               <div class="modern-preview-head"><h2>预览</h2></div>
               <div class="modern-preview-stage" :class="[`is-${detail.type}`, `is-${device}`]">
                 <div v-if="detail.type !== 'web-widget' || (device === 'desktop' ? detail.widgetDesktopVisible : detail.widgetMobileVisible)" class="widget-anchor" :class="device === 'desktop' ? detail.widgetPosition : detail.widgetMobilePosition" :style="{ '--widget-offset-x': `${device === 'desktop' ? detail.widgetOffsetX : detail.widgetMobileOffsetX}px`, '--widget-offset-y': `${device === 'desktop' ? detail.widgetOffsetY : detail.widgetMobileOffsetY}px` }">
                   <div v-if="detail.type !== 'web-widget' || widgetOpen" class="chat-surface" :style="{ '--theme': detail.themeColor, '--theme-fg': foregroundForTheme(detail.themeColor) }">
-                    <header><div class="brand-avatar"><img v-if="detail.brandAvatar" :src="detail.brandAvatar" alt="" /><span v-else>{{ (detail.brandName || detail.name).slice(0,1) }}</span></div><div><strong>{{ detail.brandName || detail.name }}</strong><small>{{ detail.brandSignature }}</small></div><button type="button" :aria-label="previewMuted ? '打开消息通知' : '关闭消息通知'" :title="previewMuted ? '打开消息通知' : '关闭消息通知'" @click="previewMuted = !previewMuted"><QiBellOff v-if="previewMuted" :size="20" /><QiBell v-else :size="20" /></button><button v-if="detail.type === 'web-widget'" type="button" aria-label="收起聊天窗口" title="收起聊天窗口" @click="widgetOpen = false"><QiCharMinus :size="20" /></button></header>
+                    <header><div class="brand-avatar"><img v-if="detail.brandAvatar" :src="detail.brandAvatar" alt="" /><span v-else>{{ (detail.brandName || detail.name).slice(0,1) }}</span></div><div><strong>{{ detail.brandName || detail.name }}</strong><small>{{ detail.brandSignature }}</small></div><button type="button" :aria-label="previewMuted ? '打开消息通知' : '关闭消息通知'" :title="previewMuted ? '打开消息通知' : '关闭消息通知'" @click="previewMuted = !previewMuted"><QIcon v-if="previewMuted" name="bell-off" :size="20" /><QIcon v-else name="bell" :size="20" /></button><button v-if="detail.type === 'web-widget'" type="button" aria-label="收起聊天窗口" title="收起聊天窗口" @click="widgetOpen = false"><QIcon name="minus" :size="20" /></button></header>
                     <main><div v-for="message in messages" :key="message.id" :class="`is-${message.role}`"><button v-if="message.kind === 'image'" class="preview-image" @click="visibleTime = visibleTime === message.id ? '' : message.id"><img :src="message.fileUrl" :alt="message.content" /></button><video v-else-if="message.kind === 'video'" class="preview-video" :src="message.fileUrl" controls @click="visibleTime = visibleTime === message.id ? '' : message.id"></video><button v-else-if="message.kind === 'file'" class="preview-file" @click="visibleTime = visibleTime === message.id ? '' : message.id">▤ {{ message.content }}</button><button v-else @click="visibleTime = visibleTime === message.id ? '' : message.id">{{ message.content }}</button><time v-if="visibleTime === message.id">{{ message.time }}</time></div></main>
-                    <footer><label class="preview-attach" title="添加文件"><QiCharPlus :size="20" /><input type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm" @change="sendPreviewAttachment" /></label><button type="button" class="preview-emoji-trigger" aria-label="插入表情" title="插入表情" @click.stop="previewEmojiOpen = !previewEmojiOpen"><QiEmojiSmile :size="20" /></button><div v-if="previewEmojiOpen" class="preview-emoji-picker" role="dialog" aria-label="选择表情"><button v-for="emoji in previewEmojis" :key="emoji" type="button" :aria-label="`插入表情 ${emoji}`" @click="insertPreviewEmoji(emoji)">{{ emoji }}</button></div><ElInput ref="previewInputRef" v-model="previewInput" placeholder="输入您的消息..." @keyup.enter="sendMessage" /><button class="send" aria-label="发送" @click="sendMessage"><QiSendRight :size="20" /></button></footer>
+                    <footer><label class="preview-attach" title="添加文件"><QIcon name="plus" :size="20" /><input type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.mov,.webm" @change="sendPreviewAttachment" /></label><button type="button" class="preview-emoji-trigger" aria-label="插入表情" title="插入表情" @click.stop="previewEmojiOpen = !previewEmojiOpen"><QIcon name="emoji" :size="20" /></button><div v-if="previewEmojiOpen" class="preview-emoji-picker" role="dialog" aria-label="选择表情"><button v-for="emoji in previewEmojis" :key="emoji" type="button" :aria-label="`插入表情 ${emoji}`" @click="insertPreviewEmoji(emoji)">{{ emoji }}</button></div><ElInput ref="previewInputRef" v-model="previewInput" placeholder="输入您的消息..." @keyup.enter="sendMessage" /><button class="send" aria-label="发送" @click="sendMessage"><QIcon name="send" :size="20" /></button></footer>
                   </div>
                   <button v-else class="widget-fab" :style="{ background: detail.themeColor, color: foregroundForTheme(detail.themeColor) }" aria-label="打开聊天窗口" @click="widgetOpen = true"><WidgetGlyph :type="detail.widgetIcon" :custom-icon="detail.widgetCustomIcon" /></button>
                 </div>
@@ -420,23 +431,23 @@ watch(query, (value) => { const limited = truncateVisibleCharacters(value, 50); 
 
         <template v-else-if="activeType === 'all'">
           <header class="channels-panel-header"><h1>全部渠道</h1></header>
-           <div class="channel-type-grid"><article v-for="type in channelTypes" :key="type" class="channel-type-card"><div class="channel-type-card-head"><ChannelGlyph :type="type" /><div><h2>{{ channelMeta[type].label }}</h2><span v-if="count(type)" class="connected-pill">已连接 {{ count(type) }}</span></div></div><p>{{ channelMeta[type].description }}</p><button :disabled="!count(type) && !permissions.create" @click="count(type) ? setType(type) : openCreate(type)">{{ count(type) ? '管理' : channelMeta[type].addLabel }}</button></article></div>
+           <div class="channel-type-grid"><article v-for="type in channelTypes" :key="type" class="channel-type-card"><div class="channel-type-card-head"><ChannelGlyph :type="type" /><div><h2>{{ channelMeta[type].label }}</h2><span v-if="count(type)" class="ui-tag is-soft is-success"><i class="ui-tag__dot is-success"></i>已连接 {{ count(type) }}</span></div></div><p>{{ channelMeta[type].description }}</p><button class="ui-btn-outline" :disabled="!count(type) && !permissions.create" @click="count(type) ? setType(type) : openCreate(type)">{{ count(type) ? '管理' : channelMeta[type].addLabel }}</button></article></div>
         </template>
 
         <template v-else>
-           <header class="channels-panel-header"><h1>{{ currentMeta?.label }}</h1><ElButton v-if="permissions.create" type="primary" @click="openCreate()"><QiCharPlus :size="16" />{{ currentMeta?.addLabel }}</ElButton></header>
+           <header class="channels-panel-header"><h1>{{ currentMeta?.label }}</h1><ElButton v-if="permissions.create" type="primary" @click="openCreate()"><QIcon name="plus" :size="16" />{{ currentMeta?.addLabel }}</ElButton></header>
           <div class="channel-list-content">
-            <div v-if="listLoadFailed" class="list-error-banner"><span>列表加载失败，已保留当前查询条件和已有数据。</span><ElButton size="small" @click="listLoadFailed = false">重试</ElButton></div>
+            <div v-if="listLoadFailed" class="list-error-banner"><span>列表加载失败，已保留当前查询条件和已有数据。</span><ElButton class="ui-btn-outline" @click="listLoadFailed = false">重试</ElButton></div>
              <ElInput v-if="store.channels.some((item) => item.type === activeType)" v-model="query" class="channel-search" clearable placeholder="搜索渠道名称" @input="page = 1" />
-            <ElTable :data="paged" class="channel-table" empty-text="暂无渠道">
-               <ElTableColumn label="渠道名称" min-width="270"><template #default="scope"><div class="channel-name-cell"><ChannelGlyph :type="scope.row.type" /><span><button class="channel-title-button" @click="scope.row.type === 'telegram' ? openEdit(scope.row) : openDetail(scope.row)"><strong>{{ scope.row.name }}</strong></button><small v-if="scope.row.websiteDomain" :title="scope.row.websiteDomain"><span>{{ scope.row.websiteDomain }}</span><a :href="`https://${scope.row.websiteDomain}`" target="_blank" rel="noopener noreferrer" aria-label="访问网站" title="在新标签页访问网站">↗</a></small></span></div></template></ElTableColumn>
+            <div class="ui-table-viewport"><ElTable height="100%" :data="paged" class="channel-table" empty-text="暂无渠道">
+               <ElTableColumn label="渠道名称" min-width="270"><template #default="scope"><div class="channel-name-cell"><ChannelGlyph :type="scope.row.type" /><span><button class="channel-title-button" @click="scope.row.type === 'telegram' ? openEdit(scope.row) : openDetail(scope.row)"><strong>{{ scope.row.name }}</strong></button><small v-if="scope.row.websiteDomain" :title="scope.row.websiteDomain"><span>{{ scope.row.websiteDomain }}</span><a :href="`https://${scope.row.websiteDomain}`" target="_blank" rel="noopener noreferrer" aria-label="访问网站" title="在新标签页访问网站"><QIcon name="external-link" :size="12" /></a></small></span></div></template></ElTableColumn>
               <ElTableColumn label="接待团队" min-width="180"><template #default="scope"><span class="agent-cell"><TeamAvatar :team="store.resolveTeam(scope.row.teamId)" />{{ store.resolveTeam(scope.row.teamId)?.name || '通用团队' }}</span></template></ElTableColumn>
               <ElTableColumn label="创建时间" width="180"><template #default="scope">{{ formatDate(scope.row.createdAt) }}</template></ElTableColumn>
-              <ElTableColumn v-if="activeType === 'web-widget'" label="状态" width="110"><template #default="scope"><span class="status-pill" :class="[scope.row.installStatus === 'success' ? 'connected' : '']">{{ scope.row.installStatus === 'success' ? '已连接' : '未连接' }}</span></template></ElTableColumn>
+              <ElTableColumn v-if="activeType === 'web-widget'" label="状态" width="110"><template #default="scope"><span class="ui-tag" :class="scope.row.installStatus === 'success' ? 'is-soft is-success' : 'is-neutral'"><i class="ui-tag__dot" :class="scope.row.installStatus === 'success' ? 'is-success' : 'is-muted'"></i>{{ scope.row.installStatus === 'success' ? '已连接' : '未连接' }}</span></template></ElTableColumn>
                <ElTableColumn label="启用状态" width="110"><template #default="scope"><ElSwitch :model-value="scope.row.enabled" :disabled="!permissions.toggle" @change="(value) => toggle(scope.row, Boolean(value))" /></template></ElTableColumn>
-               <ElTableColumn v-if="permissions.edit || permissions.delete" label="操作" width="72"><template #default="scope"><ElDropdown trigger="click"><ElButton text class="more-button">•••</ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem v-if="permissions.edit" @click="scope.row.type === 'telegram' ? openEdit(scope.row) : openDetail(scope.row)">编辑</ElDropdownItem><ElDropdownItem v-if="permissions.edit && scope.row.type === 'web-widget'" @click="openInstall(scope.row)">安装代码</ElDropdownItem><ElDropdownItem v-if="permissions.delete" divided @click="requestDelete(scope.row)">删除</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
-               <template #empty><div class="channel-empty"><strong>{{ query ? '未找到匹配的渠道' : '暂无渠道' }}</strong><span>{{ query ? '请修改或清空搜索条件。' : '创建第一个渠道连接后，将在这里统一管理。' }}</span><ElButton v-if="query" @click="query = ''">清空搜索</ElButton><ElButton v-else-if="permissions.create" type="primary" @click="openCreate()">{{ currentMeta?.addLabel }}</ElButton></div></template>
-            </ElTable><div class="table-footer"><span>共 {{ filtered.length }} 条</span><button :disabled="page === 1" @click="page--">‹</button><button class="active">{{ page }}</button><button :disabled="page === pageCount" @click="page++">›</button></div>
+               <ElTableColumn v-if="permissions.edit || permissions.delete" label="操作" width="72"><template #default="scope"><ElDropdown trigger="click"><ElButton text class="more-button" aria-label="更多操作"><QIcon name="more" :size="18" /></ElButton><template #dropdown><ElDropdownMenu><ElDropdownItem v-if="permissions.edit" @click="scope.row.type === 'telegram' ? openEdit(scope.row) : openDetail(scope.row)">编辑</ElDropdownItem><ElDropdownItem v-if="permissions.edit && scope.row.type === 'web-widget'" @click="openInstall(scope.row)">安装代码</ElDropdownItem><ElDropdownItem v-if="permissions.delete" divided @click="requestDelete(scope.row)">删除</ElDropdownItem></ElDropdownMenu></template></ElDropdown></template></ElTableColumn>
+               <template #empty><div class="channel-empty"><strong>{{ query ? '未找到匹配的渠道' : '暂无渠道' }}</strong><span>{{ query ? '请修改或清空搜索条件。' : '创建第一个渠道连接后，将在这里统一管理。' }}</span><ElButton v-if="query" class="ui-btn-outline" @click="query = ''">清空搜索</ElButton><ElButton v-else-if="permissions.create" type="primary" @click="openCreate()">{{ currentMeta?.addLabel }}</ElButton></div></template>
+            </ElTable></div><div v-if="filtered.length" class="table-footer"><span>共 {{ filtered.length }} 条</span><ElPagination v-model:current-page="page" v-model:page-size="pageSize" :page-sizes="[10, 20, 50]" layout="sizes, prev, pager, next" :total="filtered.length" /></div>
           </div>
         </template>
       </main>
@@ -450,12 +461,12 @@ watch(query, (value) => { const limited = truncateVisibleCharacters(value, 50); 
       <ElFormItem v-if="draft.type !== 'telegram'" label="界面语言"><ChannelOptionSelect v-model="draft.language" :options="languageOptions" /></ElFormItem>
       <ElFormItem label="接待团队"><ChannelOptionSelect v-model="draft.teamId" :options="teamOptions" placeholder="选择接待团队" variant="team" /></ElFormItem>
       <p v-if="formError" class="form-error">{{ formError }}</p>
-    </ElForm><template #footer><ElButton :disabled="!formDirty || formSubmitting" @click="closeForm">取消</ElButton><ElButton type="primary" :loading="formSubmitting" :disabled="!formDirty" @click="submitForm">{{ editingId ? '保存' : channelMeta[draft.type].addLabel }}</ElButton></template>
+    </ElForm><template #footer><ElButton class="ui-btn-outline" @click="closeForm">取消</ElButton><ElButton type="primary" :loading="formSubmitting" :disabled="!formDirty" @click="submitForm">{{ editingId ? '保存' : channelMeta[draft.type].addLabel }}</ElButton></template>
 </ElDialog>
 
-    <ElDialog v-model="installVisible" class="install-code-modal" title="安装网站小部件" width="860px"><p>将以下代码粘贴到页面 <code>&lt;/body&gt;</code> 标签之前。</p><pre><code>{{ detail?.installCode || draft.installCode }}</code></pre><div class="install-code-modal-actions"><ElButton class="install-code-copy-button" type="primary" @click="copy(detail?.installCode || draft.installCode || '', '安装代码')"><QiCopy :size="16" />复制代码</ElButton><ElButton v-if="detail?.type === 'web-widget' && detail.installStatus !== 'success'" @click="acknowledgeInstall">模拟安装回执</ElButton></div></ElDialog>
-    <ElDialog v-model="shareVisible" class="chat-page-setup-modal" title="与客户分享您的聊天页面" width="720px"><p class="dialog-copy">在新闻简报、网站和社交媒体上分享聊天链接，以便客户随时与你聊天。</p><div class="share-row"><ElInput :model-value="`${origin}/chat/${draft.teamId}`" readonly /><ElButton @click="copy(`${origin}/chat/${draft.teamId}`, '聊天页面链接')">复制链接</ElButton><ElButton type="primary" @click="openSharedClient">打开聊天页面</ElButton></div></ElDialog>
-    <ElDialog :model-value="Boolean(deleteTarget)" title="删除渠道？" width="480px" @update:model-value="(value) => { if (!value) deleteTarget = undefined }"><p class="dialog-copy">删除后该渠道的入站消息将立即停止，历史会话保留但不可继续接收。请输入渠道名称以确认。</p><label class="delete-label">渠道名称<ElInput v-model="deleteName" :placeholder="deleteTarget?.name" /></label><template #footer><ElButton @click="deleteTarget = undefined">取消</ElButton><ElButton type="danger" :disabled="deleteName !== deleteTarget?.name" @click="confirmDelete">确认删除</ElButton></template></ElDialog>
+    <ElDialog v-model="installVisible" class="install-code-modal" title="安装网站小部件" width="860px"><p>将以下代码粘贴到页面 <code>&lt;/body&gt;</code> 标签之前。</p><pre><code>{{ detail?.installCode || draft.installCode }}</code></pre><div class="install-code-modal-actions"><ElButton v-if="detail?.type === 'web-widget' && detail.installStatus !== 'success'" class="ui-btn-outline" @click="acknowledgeInstall">模拟安装回执</ElButton><ElButton class="install-code-copy-button" type="primary" @click="copy(detail?.installCode || draft.installCode || '', '安装代码')"><QIcon name="copy" :size="16" />复制代码</ElButton></div></ElDialog>
+    <ElDialog v-model="shareVisible" class="chat-page-setup-modal" title="与客户分享您的聊天页面" width="720px"><p class="dialog-copy">在新闻简报、网站和社交媒体上分享聊天链接，以便客户随时与你聊天。</p><div class="share-row"><ElInput :model-value="`${origin}/chat/${draft.teamId}`" readonly /><ElButton class="ui-btn-outline" @click="copy(`${origin}/chat/${draft.teamId}`, '聊天页面链接')">复制链接</ElButton><ElButton type="primary" @click="openSharedClient">打开聊天页面</ElButton></div></ElDialog>
+    <ElDialog :model-value="Boolean(deleteTarget)" class="channel-delete-dialog" title="删除渠道？" width="480px" @update:model-value="(value) => { if (!value) deleteTarget = undefined }"><p class="dialog-copy">删除后该渠道的入站消息将立即停止，历史会话保留但不可继续接收。请输入渠道名称以确认。</p><label class="delete-label">渠道名称<ElInput v-model="deleteName" :placeholder="deleteTarget?.name" /></label><template #footer><ElButton class="ui-btn-outline" @click="deleteTarget = undefined">取消</ElButton><ElButton type="danger" :disabled="deleteName !== deleteTarget?.name" @click="confirmDelete">确认删除</ElButton></template></ElDialog>
   </section>
 </template>
 
