@@ -353,6 +353,56 @@ h4 {
   --el-switch-off-color: #c9c9cd;
 }
 
+/* 复选框：全站 16×16、圆角 3、白底 1px #C9C9CD 描边；选中近黑实底 + 白勾。
+   对勾用 translate(-50%,-50%) 几何居中（Element Plus 默认 -45%/-60% 会偏上偏右）。
+   配色也收在这一层，避免页面级 :not(.is-checked) 规则压住 hover / 禁用 / 半选。 */
+.el-checkbox.el-checkbox {
+  --el-checkbox-input-width: 16px;
+  --el-checkbox-input-height: 16px;
+  --el-checkbox-border-radius: 3px;
+  --el-checkbox-input-border: 1px solid #c9c9cd;
+  --el-checkbox-bg-color: #ffffff;
+  --el-checkbox-checked-bg-color: #131317;
+  --el-checkbox-checked-input-border-color: #131317;
+  --el-checkbox-checked-icon-color: #ffffff;
+  --el-checkbox-input-border-color-hover: #131317;
+  --el-checkbox-disabled-border-color: #ececed;
+  --el-checkbox-disabled-input-fill: #f5f5f5;
+  --el-checkbox-disabled-checked-input-fill: #f5f5f5;
+  --el-checkbox-disabled-checked-input-border-color: #ececed;
+  --el-checkbox-disabled-checked-icon-color: #b6b6ba;
+}
+
+.el-checkbox .el-checkbox__inner {
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.el-checkbox .el-checkbox__inner::after {
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 8px;
+  /* 对勾由右/下 1px 边线拼成，墨迹包围盒中心比 border box 中心低
+     0.3536 ×(content 宽 4px)≈1.414px；反向补偿后墨迹包围盒落在方框几何中心。 */
+  transform: translate(-50%, calc(-50% - 1.414px)) rotate(45deg) scaleY(0);
+  transform-origin: center;
+}
+
+.el-checkbox .el-checkbox__input.is-checked .el-checkbox__inner::after {
+  transform: translate(-50%, calc(-50% - 1.414px)) rotate(45deg) scaleY(1);
+}
+
+.el-checkbox .el-checkbox__input.is-indeterminate .el-checkbox__inner::before {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  transform: translateY(-50%) scale(0.5);
+}
+
 .el-message,
 .el-message-box,
 .el-popper {

@@ -59,6 +59,11 @@ aside.fixed.left-0.top-0 {
   background: hsl(var(--background-deep));
 }
 
+/* 顶栏右侧图标组与用户头像整组留出安全右边距，使头像右边缘距窗口右缘 12px，与内容面板右间隙一致。 */
+#app header.flex.w-full > div.flex.h-full.min-w-0.shrink-0.items-center {
+  padding-right: 10px;
+}
+
 aside.fixed.left-0.top-0 > div {
   background: hsl(var(--background-deep)) !important;
   border-right: 0 !important;

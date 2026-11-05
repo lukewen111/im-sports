@@ -96,10 +96,6 @@ function toggle(key: NotificationKey, value: string | number | boolean) {
 }
 
 .option-row :deep(.el-checkbox) {
-  --el-checkbox-checked-bg-color: #131317;
-  --el-checkbox-checked-input-border-color: #131317;
-  --el-checkbox-checked-icon-color: #ffffff;
-  --el-checkbox-input-border-color-hover: #131317;
   height: auto;
   margin-right: 0;
 }
@@ -120,23 +116,6 @@ function toggle(key: NotificationKey, value: string | number | boolean) {
   color: var(--ui-ink);
   font-size: 14px;
   line-height: 22px;
-}
-
-.option-row :deep(.el-checkbox__inner) {
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-}
-
-.option-row :deep(.el-checkbox:not(.is-checked) .el-checkbox__inner) {
-  border-color: #c9c9cd;
-}
-
-.option-row :deep(.el-checkbox__inner::after) {
-  top: 3px;
-  left: 5px;
-  width: 4px;
-  height: 8px;
 }
 
 .help-dot {
