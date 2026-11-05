@@ -502,7 +502,10 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
     <RoleConfiguration v-if="currentView === 'roles'" />
     <template v-else-if="detailTeam">
       <header class="team-page-header detail-header">
-        <ElButton class="ui-btn-outline back-button" @click="closeTeamDetail"><QIcon name="arrow-left" :size="16" />返回</ElButton>
+        <div class="detail-heading">
+          <button class="back-button" aria-label="返回" @click="closeTeamDetail"><QIcon name="arrow-left" :size="20" /></button>
+          <h1>团队</h1>
+        </div>
       </header>
       <section class="team-detail">
         <div class="team-identity">

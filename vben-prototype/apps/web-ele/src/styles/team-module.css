@@ -67,13 +67,18 @@
 .team-page * { box-sizing: border-box; }
 .team-page-header { display: flex; min-height: 48px; height: 48px; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px; border-bottom: 1px solid var(--ui-line); border-radius: 16px 16px 0 0; }
 .team-page-header h1 { margin: 0; color: var(--ui-ink); font-size: 16px; line-height: 24px; font-weight: 500; }
-.team-page-header.detail-header { justify-content: space-between; }
+.team-page-header.detail-header { height: 52px; min-height: 52px; justify-content: flex-start; padding: 0 16px; }
+.team-page-header.detail-header .detail-heading { display: flex; align-items: center; gap: 10px; }
+.team-page-header.detail-header .back-button { display: grid; width: 32px; height: 32px; padding: 0; place-items: center; color: var(--ui-ink); background: none; border: 0; border-radius: var(--ui-radius-control); cursor: pointer; }
+.team-page-header.detail-header .back-button:hover { background: var(--ui-surface-control); }
+.team-page-header.detail-header .back-button svg { width: 20px; height: 20px; }
+.team-page-header.detail-header h1 { color: var(--ui-ink); font-size: 17px; line-height: 24px; font-weight: 600; }
 .team-content, .team-detail { display: flex; min-height: 0; flex: 1; flex-direction: column; padding: 24px; }
 .team-content { min-width: 0; }
 .team-table-viewport { flex: 1; min-height: 0; }
-.toolbar { display: flex; min-height: 36px; flex-wrap: nowrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.toolbar { display: flex; min-height: 36px; flex-wrap: nowrap; align-items: center; gap: 10px; margin-bottom: 12px; }
 .toolbar .el-select { width: 140px; }
-.team-search { width: 280px; flex: 0 0 280px; }
+.team-search { width: 140px; flex: 0 0 140px; }
 .team-page .team-search .el-input__wrapper { border-radius: var(--ui-radius-control); box-shadow: 0 0 0 1px var(--ui-control-line) inset; transition: box-shadow 160ms ease; }
 .team-page .team-search .el-input__wrapper:hover { box-shadow: 0 0 0 1px var(--ui-ink-muted) inset; }
 .team-page .team-search .el-input__wrapper:is(.is-focus, :focus-within) { box-shadow: 0 0 0 1px var(--ui-accent) inset, 0 0 0 3px var(--ui-accent-ring) !important; }
@@ -217,6 +222,7 @@
 @media (max-width: 1366px) {
   .toolbar { flex-wrap: wrap; }
   .toolbar .el-select { flex: 0 0 140px; }
+  .team-search { width: 128px; flex: 0 0 128px; }
 }
 
 @media (max-width: 900px) {
