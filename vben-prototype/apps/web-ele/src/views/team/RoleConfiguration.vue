@@ -287,7 +287,6 @@ watch(roleRecords, (list) => {
           </div>
         </template>
       </ElTable></div>
-      <footer v-if="rows.length" class="ui-table-footer"><span>共 {{ rows.length }} 个角色</span></footer>
     </div>
 
     <ElDrawer v-model="drawer" class="ui-drawer role-drawer" :title="readonly ? '角色详情' : draft?.version ? '编辑角色' : '创建角色'" size="640px" :before-close="close" append-to-body>

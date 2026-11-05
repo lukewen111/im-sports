@@ -104,17 +104,6 @@
 .ui-table .el-table__row { background: transparent; }
 .ui-table .el-table__row:hover > td.el-table__cell { background: var(--ui-canvas); }
 
-.ui-table-footer {
-  display: flex;
-  min-height: 52px;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 0 0;
-  color: var(--ui-ink-muted);
-  font-size: 12px;
-}
-
 /* ---------- 表单 ---------- */
 .ui-form .el-form-item { margin-bottom: 20px; }
 .ui-form .el-form-item__label {
