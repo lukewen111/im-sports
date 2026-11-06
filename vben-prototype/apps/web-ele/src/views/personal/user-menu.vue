@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // 顶栏浮层接入点：layouts/basic.vue 的 #user-dropdown 插槽渲染本组件，并监听 @logout。
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { useRouter } from 'vue-router';
 
 import { loadLocaleMessages } from '@vben/locales';
 import { updatePreferences } from '@vben/preferences';
@@ -17,7 +16,6 @@ type SupportedLocale = 'en-US' | 'zh-CN';
 
 const COPY = {
   'zh-CN': {
-    profile: '个人资料',
     acceptChat: '接受聊天',
     online: '在线',
     offline: '离线',
@@ -29,7 +27,6 @@ const COPY = {
     localeFailed: '界面语言保存失败，请重试',
   },
   'en-US': {
-    profile: 'Profile',
     acceptChat: 'Accept chats',
     online: 'Online',
     offline: 'Offline',
@@ -49,7 +46,6 @@ const LANGUAGE_LABELS: Record<SupportedLocale, string> = {
 
 const emit = defineEmits<{ logout: [] }>();
 
-const router = useRouter();
 const store = useDemoServiceStore();
 const identity = useProfileIdentity();
 
@@ -102,11 +98,6 @@ function onKeydown(event: KeyboardEvent) {
 
 function onViewportChange() {
   if (open.value) updatePosition();
-}
-
-function openProfile() {
-  closeMenu();
-  void router.push('/personal');
 }
 
 function toggleAccepting() {
@@ -203,42 +194,6 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="panel-group">
-          <button type="button" class="menu-row is-clickable" role="menuitem" @click="openProfile">
-            <span class="row-label">{{ t.profile }}</span>
-            <QIcon class="row-icon" name="chevron-right" :size="16" />
-          </button>
-        </div>
-
-        <div class="panel-group">
-          <button
-            type="button"
-            class="menu-row is-clickable"
-            :aria-expanded="languageOpen"
-            @click="toggleLanguage"
-          >
-            <span class="row-label">{{ t.language }}</span>
-            <span class="row-tail">
-              <span class="row-value">{{ LANGUAGE_LABELS[locale] }}</span>
-              <QIcon class="row-icon" :class="{ 'is-open': languageOpen }" name="chevron-down" :size="16" />
-            </span>
-          </button>
-          <template v-if="languageOpen">
-            <button
-              v-for="item in (Object.keys(LANGUAGE_LABELS) as SupportedLocale[])"
-              :key="item"
-              type="button"
-              class="menu-row language-option"
-              role="menuitemradio"
-              :aria-checked="locale === item"
-              @click="selectLocale(item)"
-            >
-              <span class="row-label">{{ LANGUAGE_LABELS[item] }}</span>
-              <QIcon v-if="locale === item" class="check-icon" name="check" :size="16" />
-            </button>
-          </template>
-        </div>
-
-        <div class="panel-group">
           <div class="menu-row">
             <span class="row-label">{{ t.acceptChat }}</span>
             <div class="row-tail">
@@ -256,6 +211,35 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
+        </div>
+
+        <div class="panel-group">
+          <button
+            type="button"
+            class="menu-row is-clickable"
+            :aria-expanded="languageOpen"
+            @click="toggleLanguage"
+          >
+            <span class="row-label">{{ t.language }}</span>
+            <span class="row-tail">
+              <span class="row-value">{{ LANGUAGE_LABELS[locale] }}</span>
+              <QIcon class="row-icon" :class="{ 'is-open': languageOpen }" name="chevron-right" :size="16" />
+            </span>
+          </button>
+          <template v-if="languageOpen">
+            <button
+              v-for="item in (Object.keys(LANGUAGE_LABELS) as SupportedLocale[])"
+              :key="item"
+              type="button"
+              class="menu-row language-option"
+              role="menuitemradio"
+              :aria-checked="locale === item"
+              @click="selectLocale(item)"
+            >
+              <span class="row-label">{{ LANGUAGE_LABELS[item] }}</span>
+              <QIcon v-if="locale === item" class="check-icon" name="check" :size="16" />
+            </button>
+          </template>
         </div>
 
         <button type="button" class="logout-row" role="menuitem" @click="logout">
@@ -436,7 +420,7 @@ onBeforeUnmount(() => {
 }
 
 .row-icon.is-open {
-  transform: rotate(180deg);
+  transform: rotate(90deg);
 }
 
 .toggle {
