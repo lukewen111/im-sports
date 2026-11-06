@@ -65,6 +65,16 @@
   --ui-accent-soft-strong: rgb(0 63 164 / 10%);
   --ui-accent-ring: rgb(0 63 164 / 24%);
 
+  /* 侧栏菜单（一级侧栏与设置第二栏共用，改一处两处同步） */
+  --ui-menu-item-radius: 8px;
+  --ui-menu-item-bg-hover: #e6e6e7;
+  --ui-menu-item-bg-selected: #d9d9da;
+  --ui-menu-item-color: #62626d;
+  --ui-menu-item-color-active: #131317;
+  --ui-menu-item-weight-active: 500;
+  --ui-menu-item-padding-left: 8px;
+  --ui-menu-item-padding-right: 12px;
+
   /* ---------- 尺寸刻度 ---------- */
   --ui-radius-control: 8px;
   --ui-radius-card: 16px;

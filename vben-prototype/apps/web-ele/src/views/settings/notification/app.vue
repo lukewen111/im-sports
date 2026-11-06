@@ -45,7 +45,6 @@ function toggle(key: NotificationKey, value: string | number | boolean) {
   <PageShell
     :can-access="canAccess"
     :member-name="member?.name"
-    title="消息通知"
   >
     <section class="settings-card">
       <header class="card-head">

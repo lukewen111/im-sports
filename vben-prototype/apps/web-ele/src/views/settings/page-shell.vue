@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watchEffect } from 'vue';
+import { computed, ref, watchEffect } from 'vue';
 import { useRoute } from 'vue-router';
 
 import QIcon from '#/components/q-icon/QIcon.vue';
@@ -7,7 +7,6 @@ import QIcon from '#/components/q-icon/QIcon.vue';
 interface Props {
   canAccess: boolean;
   memberName?: string;
-  title: string;
 }
 
 const props = defineProps<Props>();
@@ -41,11 +40,15 @@ const navItems = [
 function isActive(path: string) {
   return route.path.replace(/\/$/, '') === path;
 }
+
+const pageTitle = computed(() => navItems.find((item) => isActive(item.path))?.label ?? '设置');
 </script>
 
 <template>
   <div class="settings-layout">
     <aside class="settings-nav">
+      <h2 class="nav-title">设置</h2>
+
       <button
         class="nav-heading"
         type="button"
@@ -79,7 +82,7 @@ function isActive(path: string) {
 
     <main class="settings-main">
       <header class="title-bar">
-        <h1>{{ props.title }}</h1>
+        <h1>{{ pageTitle }}</h1>
       </header>
 
       <section v-if="props.canAccess" class="content">
@@ -111,8 +114,20 @@ function isActive(path: string) {
   box-sizing: border-box;
   width: 200px;
   flex: none;
-  padding: 12px 10px 16px;
+  padding: 12px 12px 16px;
   background: #f7f7f7;
+}
+
+.nav-title {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  margin: 0 0 8px;
+  padding: 0 10px;
+  color: var(--ui-ink);
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
 }
 
 .nav-heading {
@@ -164,26 +179,26 @@ function isActive(path: string) {
   height: 32px;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
-  color: #62626d;
+  padding: 0 var(--ui-menu-item-padding-right) 0 var(--ui-menu-item-padding-left);
+  color: var(--ui-menu-item-color);
   font-size: 13px;
   font-weight: 400;
   line-height: 1;
   text-decoration: none;
-  border-radius: 6px;
+  border-radius: var(--ui-menu-item-radius);
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 
 .nav-item:hover {
-  background: #efefef;
+  background: var(--ui-menu-item-bg-hover);
 }
 
 .nav-item.is-active {
-  color: #131317;
-  font-weight: 500;
-  background: #eaeaea;
+  color: var(--ui-menu-item-color-active);
+  font-weight: var(--ui-menu-item-weight-active);
+  background: var(--ui-menu-item-bg-selected);
 }
 
 .nav-icon {
@@ -215,7 +230,7 @@ function isActive(path: string) {
   height: 48px;
   flex: none;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 16px;
   background: #ffffff;
   border-bottom: 1px solid #ececed;
   border-radius: 16px 16px 0 0;
@@ -235,12 +250,12 @@ function isActive(path: string) {
   max-width: 1100px;
   min-height: 0;
   flex: 1;
-  padding: 24px 20px 24px;
+  padding: 12px 16px 24px;
   overflow-y: auto;
 }
 
 .ui-empty {
   max-width: 720px;
-  margin: 24px 20px;
+  margin: 12px 16px;
 }
 </style>

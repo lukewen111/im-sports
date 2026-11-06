@@ -56,7 +56,6 @@ function resetDraft() {
   <PageShell
     :can-access="canAccess"
     :member-name="member?.name"
-    title="会话设置"
   >
     <section class="settings-card">
       <div class="rule-list">
@@ -92,7 +91,7 @@ function resetDraft() {
           <div class="rule-body">
             <span class="rule-title">会话无消息自动结束时间</span>
             <p class="rule-desc">
-              聊天中超过该时间没有新的成功业务消息，会话自动结束；待分配会话不受此规则影响。
+              聊天中超过该时间没有新的成功业务消息，会话自动结束。
             </p>
             <small v-if="errors.inactive" class="rule-error">{{ errors.inactive }}</small>
           </div>

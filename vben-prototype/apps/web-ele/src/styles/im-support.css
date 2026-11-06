@@ -74,14 +74,14 @@ aside.fixed.left-0.top-0 > div {
   --menu-background-color: 0 0% 96.1% !important;
   --menu-font-size: 13px !important;
   --menu-item-height: 40px !important;
-  --menu-item-radius: 8px !important;
+  --menu-item-radius: var(--ui-menu-item-radius) !important;
   --menu-item-margin-x: 8px !important;
   --menu-item-margin-y: 2px !important;
-  --menu-item-color: #62626d !important;
-  --menu-item-hover-color: #131317 !important;
-  --menu-item-hover-background-color: #e6e6e7 !important;
-  --menu-item-active-color: #131317 !important;
-  --menu-item-active-background-color: #d9d9da !important;
+  --menu-item-color: var(--ui-menu-item-color) !important;
+  --menu-item-hover-color: var(--ui-menu-item-color-active) !important;
+  --menu-item-hover-background-color: var(--ui-menu-item-bg-hover) !important;
+  --menu-item-active-color: var(--ui-menu-item-color-active) !important;
+  --menu-item-active-background-color: var(--ui-menu-item-bg-selected) !important;
 }
 
 .vben-menu.is-light > .vben-menu-item,
