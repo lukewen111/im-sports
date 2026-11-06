@@ -136,7 +136,9 @@ const file = (name: string, size?: number, type = 'application/pdf'): DemoAttach
         : '掉线录屏：团战中画面卡住，网络连接中断后掉出对局。';
     return { ...VIDEO_ASSET, kind: 'video', name, size, summary, type: 'video/mp4' };
   }
-  return image(name, size, 'image/jpeg');
+  if (type.startsWith('image/')) return image(name, size, type);
+  // PDF / ZIP 等文件按通用附件展示，避免把“申诉材料.zip”渲染成截图。
+  return { name, size, type };
 };
 
 /* ----------------------------------------------------------------------------
@@ -196,24 +198,24 @@ const TELEGRAM = 'channel-telegram-payment' as const;
 const GAME_SITE = 'https://support.imsports.game';
 
 export const seedCustomers: DemoCustomer[] = [
-  makeCustomer({ browser: 'Safari 18', channelId: WEB_WIDGET, channelType: 'web-widget', device: '移动端', durationSeconds: 640, email: 'yefeng@game.example.com', firstVisitAgo: 4320, id: 'customer-10001', lastVisitAgo: 6, name: '夜风', os: 'iOS 18', phone: '138****1024', referrer: `${GAME_SITE}/recharge`, region: '中国·上海', remark: 'iOS 区服 1024 · 充值未到账', seed: 1001, visitCount: 4 }),
-  makeCustomer({ browser: 'Chrome 128', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 130, email: '', firstVisitAgo: 22, id: 'customer-10002', lastVisitAgo: 4, name: '奶茶三分糖', os: 'Android 14', phone: '', referrer: `${GAME_SITE}/gift`, region: '中国·杭州', remark: '礼包码兑换失败 · 待接待', seed: 1002, visitCount: 1 }),
-  makeCustomer({ browser: 'Telegram 11.2', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: '', firstVisitAgo: 1440, id: 'customer-10003', lastVisitAgo: 1320, name: '阿哲', os: 'iOS 18', phone: '', referrer: '', region: '中国·广州', remark: '封禁申诉 · 已结案', seed: 1003, visitCount: 2 }),
+  makeCustomer({ browser: 'Safari 18', channelId: WEB_WIDGET, channelType: 'web-widget', device: '移动端', durationSeconds: 640, email: 'yefeng@game.example.com', firstVisitAgo: 4320, id: 'customer-10001', lastVisitAgo: 3, name: '夜风', os: 'iOS 18', phone: '138****1024', referrer: `${GAME_SITE}/recharge`, region: '中国·上海', remark: 'iOS 区服 1024 · 充值未到账', seed: 1001, visitCount: 4 }),
+  makeCustomer({ browser: 'Chrome 128', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 130, email: '', firstVisitAgo: 22, id: 'customer-10002', lastVisitAgo: 5, name: '奶茶三分糖', os: 'Android 14', phone: '', referrer: `${GAME_SITE}/gift`, region: '中国·杭州', remark: '礼包码兑换失败 · 待接待', seed: 1002, visitCount: 1 }),
+  makeCustomer({ browser: 'Telegram 11.2', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: '', firstVisitAgo: 1440, id: 'customer-10003', lastVisitAgo: dayAgo(1, 21, 45), name: '阿哲', os: 'iOS 18', phone: '', referrer: '', region: '中国·广州', remark: '封禁申诉 · 已结案', seed: 1003, visitCount: 2 }),
   makeCustomer({ browser: 'Edge 126', channelId: WEB_WIDGET, channelType: 'web-widget', device: '桌面端', durationSeconds: 420, email: 'xiaoming@game.example.com', firstVisitAgo: 8000, id: 'customer-10004', lastVisitAgo: 20, name: '小明同学', os: 'Windows 11', phone: '139****5678', referrer: `${GAME_SITE}/refund`, region: '中国·北京', remark: '未成年人退款 · 监护材料已提交', seed: 1004, visitCount: 3 }),
   makeCustomer({ browser: 'Telegram 11', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: '', firstVisitAgo: 600, id: 'customer-10005', lastVisitAgo: 48, name: 'Nok', os: 'Android 14', phone: '', referrer: '', region: '泰国·曼谷', remark: '泰国玩家 · 充值未到账', seed: 1005, visitCount: 1 }),
-  makeCustomer({ browser: 'Chrome 127', channelId: WEB_WIDGET, channelType: 'web-widget', device: '桌面端', durationSeconds: 300, email: 'laowang@game.example.com', firstVisitAgo: 10080, id: 'customer-10006', lastVisitAgo: 9, name: '老王', os: 'Windows 11', phone: '137****2210', referrer: `${GAME_SITE}/download`, region: '中国·成都', remark: '版本更新闪退 · 跟进中', seed: 1006, visitCount: 5 }),
-  makeCustomer({ browser: 'Safari 18', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 180, email: 'xiaobei@game.example.com', firstVisitAgo: 2880, id: 'customer-10007', lastVisitAgo: 14, name: '小北', os: 'iOS 17', phone: '135****6644', referrer: `${GAME_SITE}/account`, region: '中国·武汉', remark: '换绑手机号 · 已完成验证', seed: 1007, visitCount: 2 }),
-  makeCustomer({ browser: 'Chrome 127', channelId: WEB_WIDGET, channelType: 'web-widget', device: '移动端', durationSeconds: 520, email: 'suda@game.example.com', firstVisitAgo: 4320, id: 'customer-10008', lastVisitAgo: 23, name: '苏打水', os: 'Android 13', phone: '136****7788', referrer: `${GAME_SITE}/activity`, region: '中国·南京', remark: '活动奖励未发放 · 区服 305', seed: 1008, visitCount: 3 }),
+  makeCustomer({ browser: 'Chrome 127', channelId: WEB_WIDGET, channelType: 'web-widget', device: '桌面端', durationSeconds: 300, email: 'laowang@game.example.com', firstVisitAgo: 10080, id: 'customer-10006', lastVisitAgo: 8, name: '老王', os: 'Windows 11', phone: '137****2210', referrer: `${GAME_SITE}/download`, region: '中国·成都', remark: '版本更新闪退 · 跟进中', seed: 1006, visitCount: 5 }),
+  makeCustomer({ browser: 'Safari 18', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 180, email: 'xiaobei@game.example.com', firstVisitAgo: 7200, id: 'customer-10007', lastVisitAgo: dayAgo(3, 14, 20), name: '小北', os: 'iOS 17', phone: '135****6644', referrer: `${GAME_SITE}/account`, region: '中国·武汉', remark: '换绑手机号 · 已完成验证', seed: 1007, visitCount: 2 }),
+  makeCustomer({ browser: 'Chrome 127', channelId: WEB_WIDGET, channelType: 'web-widget', device: '移动端', durationSeconds: 520, email: 'suda@game.example.com', firstVisitAgo: 4320, id: 'customer-10008', lastVisitAgo: dayAgo(2, 21, 10), name: '苏打水', os: 'Android 13', phone: '136****7788', referrer: `${GAME_SITE}/activity`, region: '中国·南京', remark: '活动奖励未发放 · 区服 305', seed: 1008, visitCount: 5 }),
   makeCustomer({ browser: 'Chrome 128', channelId: WEB_WIDGET, channelType: 'web-widget', device: '移动端', durationSeconds: 410, email: 'an.nguyen@game.example.com', firstVisitAgo: 7200, id: 'customer-10009', lastVisitAgo: 31, name: 'An Nguyễn', os: 'Android 14', phone: '', referrer: `${GAME_SITE}/recharge`, region: '越南·胡志明市', remark: '越南玩家 · 充值未到账', seed: 1009, visitCount: 2 }),
-  makeCustomer({ browser: 'Safari 18', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 160, email: 'shisan@game.example.com', firstVisitAgo: 5760, id: 'customer-10010', lastVisitAgo: 52, name: '十三', os: 'iOS 16', phone: '133****9900', referrer: `${GAME_SITE}/chat`, region: '中国·重庆', remark: '掉线严重 · 区服 2008', seed: 1010, visitCount: 2 }),
-  makeCustomer({ browser: 'Chrome 126', channelId: WEB_WIDGET, channelType: 'web-widget', device: '桌面端', durationSeconds: 380, email: 'ali@game.example.com', firstVisitAgo: 9000, id: 'customer-10011', lastVisitAgo: 41, name: '阿狸', os: 'Windows 10', phone: '', referrer: `${GAME_SITE}/report`, region: '中国·苏州', remark: '外挂举报 · 录像已上传', seed: 1011, visitCount: 4 }),
+  makeCustomer({ browser: 'Safari 18', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 160, email: 'shisan@game.example.com', firstVisitAgo: 5760, id: 'customer-10010', lastVisitAgo: dayAgo(1, 18, 5), name: '十三', os: 'iOS 16', phone: '133****9900', referrer: `${GAME_SITE}/chat`, region: '中国·重庆', remark: '掉线严重 · 区服 2008', seed: 1010, visitCount: 2 }),
+  makeCustomer({ browser: 'Chrome 126', channelId: WEB_WIDGET, channelType: 'web-widget', device: '桌面端', durationSeconds: 380, email: 'ali@game.example.com', firstVisitAgo: 9000, id: 'customer-10011', lastVisitAgo: dayAgo(5, 10, 30), name: '阿狸', os: 'Windows 10', phone: '', referrer: `${GAME_SITE}/report`, region: '中国·苏州', remark: '外挂举报 · 录像已上传', seed: 1011, visitCount: 4 }),
   makeCustomer({ browser: 'Chrome 128', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 75, email: 'kekele@game.example.com', firstVisitAgo: 19, id: 'customer-10012', lastVisitAgo: 19, name: '可乐加冰', os: 'Android 13', phone: '', referrer: `${GAME_SITE}/gift`, region: '中国·天津', remark: '礼包码失效 · 待分配', seed: 1012, visitCount: 1 }),
   makeCustomer({ browser: 'Telegram 11', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: 'emily@game.example.com', firstVisitAgo: 6000, id: 'customer-10013', lastVisitAgo: 28, name: 'Emily', os: 'iOS 18', phone: '', referrer: '', region: '新加坡', remark: 'English player · 礼包码兑换失败', seed: 1013, visitCount: 3 }),
   makeCustomer({ browser: 'Telegram 10.9', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: '', firstVisitAgo: 1560, id: 'customer-10014', lastVisitAgo: 36, name: '糖不甜', os: 'Android 14', phone: '', referrer: '', region: '中国·福州', remark: '活动奖励未到账 · 七夕活动', seed: 1014, visitCount: 2 }),
   makeCustomer({ browser: 'Chrome 127', channelId: CHAT_PAGE, channelType: 'chat-page', device: '桌面端', durationSeconds: 205, email: 'laok@game.example.com', firstVisitAgo: 3900, id: 'customer-10015', lastVisitAgo: 44, name: '老K', os: 'Windows 11', phone: '', referrer: `${GAME_SITE}/login`, region: '中国·西安', remark: '登录不上 · 二次验证收不到码', seed: 1015, visitCount: 2 }),
   makeCustomer({ browser: 'Safari 18', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 260, email: 'xiaolu@game.example.com', firstVisitAgo: 5100, id: 'customer-10016', lastVisitAgo: 33, name: '小鹿', os: 'iOS 18', phone: '', referrer: `${GAME_SITE}/refund`, region: '中国·长沙', remark: '未成年退款 · 家长来电', seed: 1016, visitCount: 3 }),
   makeCustomer({ browser: 'Telegram 11.1', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: '', firstVisitAgo: 1300, id: 'customer-10017', lastVisitAgo: 61, name: '钢铁直男', os: 'Android 14', phone: '', referrer: '', region: '中国·青岛', remark: '举报队友挂机 · 排位赛', seed: 1017, visitCount: 1 }),
-  makeCustomer({ browser: 'Telegram 11', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: 'mai.tran@game.example.com', firstVisitAgo: 2700, id: 'customer-10018', lastVisitAgo: 72, name: 'Mai Trần', os: 'iOS 18', phone: '', referrer: '', region: '越南·河内', remark: '越南玩家 · 封禁申诉', seed: 1018, visitCount: 2 }),
+  makeCustomer({ browser: 'Telegram 11', channelId: TELEGRAM, channelType: 'telegram', device: '移动端', durationSeconds: 0, email: 'mai.tran@game.example.com', firstVisitAgo: 2700, id: 'customer-10018', lastVisitAgo: dayAgo(1, 16, 20), name: 'Mai Trần', os: 'iOS 18', phone: '', referrer: '', region: '越南·河内', remark: '越南玩家 · 封禁申诉', seed: 1018, visitCount: 2 }),
   makeCustomer({ browser: 'Chrome 128', channelId: WEB_WIDGET, channelType: 'web-widget', device: '移动端', durationSeconds: 340, email: 'yiketang@game.example.com', firstVisitAgo: 4200, id: 'customer-10019', lastVisitAgo: 39, name: '一颗糖', os: 'Android 13', phone: '', referrer: `${GAME_SITE}/download`, region: '中国·合肥', remark: '版本更新黑屏 · 区服 120', seed: 1019, visitCount: 2 }),
   makeCustomer({ browser: 'Safari 18', channelId: CHAT_PAGE, channelType: 'chat-page', device: '移动端', durationSeconds: 55, email: 'awei@game.example.com', firstVisitAgo: 40, id: 'customer-10020', lastVisitAgo: 40, name: '阿伟', os: 'iOS 18', phone: '', referrer: `${GAME_SITE}/account`, region: '中国·厦门', remark: '账号找回 · 待分配', seed: 1020, visitCount: 1 }),
 ];
@@ -232,15 +234,21 @@ const OWNER: ActorConfig = { agentId: 'member-owner', agentName: '卢森堡' };
 const SOPHIE: ActorConfig = { agentId: 'member-sophie', agentName: '苏菲' };
 const CHENYI: ActorConfig = { agentId: 'member-chenyi', agentName: '陈一' };
 const AI_SALES: ActorConfig = { aiId: 'member-ai-sales', aiName: '小麦' };
+/** 米卡属于售后团队且当前离线：只承接历史已结束会话，用来覆盖团队筛选与离线成员样本。 */
+const MIKA: ActorConfig = { agentId: 'member-mika', agentName: '米卡' };
 
 const buildMessage = (sessionId: string, step: TextStep, sentAt: string, index: number, actor: ActorConfig): DemoMessage => {
   const isAi = step.role === 'ai';
   const isAgent = step.role === 'agent';
   const language = step.language || '简体中文';
-  const kind = step.kind || (step.attachment ? (step.attachment.kind === 'video' ? 'video' : 'image') : 'text');
+  const attachmentKind = step.attachment?.kind;
+  const kind = step.kind || (step.attachment
+    ? (attachmentKind === 'video' ? 'video' : attachmentKind === 'image' ? 'image' : 'attachment')
+    : 'text');
   const content = step.content || (step.attachment?.kind === 'video' ? step.attachment.summary || '玩家上传了一段录屏。' : '');
-  const translation = step.translation && language !== '简体中文'
-    ? { sourceLanguage: language, targetLanguage: '简体中文', text: step.translation, translatedAt: sentAt }
+  // 种子只预置译文缓存，不写 translatedBy：进入会话先看原文，手动翻译命中缓存即出
+  const translations = step.translation && language !== '简体中文'
+    ? { 简体中文: { generated: false, sourceLanguage: language, targetLanguage: '简体中文', text: step.translation, translatedAt: sentAt } }
     : undefined;
   return {
     attachment: step.attachment,
@@ -254,7 +262,7 @@ const buildMessage = (sessionId: string, step: TextStep, sentAt: string, index: 
     sentAt,
     status: step.failed ? 'failed' : 'sent',
     success: !step.failed,
-    translation,
+    translations,
   };
 };
 
@@ -360,6 +368,7 @@ const owner = { id: 'member-owner', kind: 'human' as const };
 const sophie = { id: 'member-sophie', kind: 'human' as const };
 const chenyi = { id: 'member-chenyi', kind: 'human' as const };
 const aiSales = { id: 'member-ai-sales', kind: 'ai' as const };
+const mika = { id: 'member-mika', kind: 'human' as const };
 
 /* ---------------------- 工单脚本：充值未到账 / 订单失败 ---------------------- */
 interface RechargeContext {
@@ -631,6 +640,7 @@ const thaiRechargeSteps = (): DialogStep[] => [
   agentStep(0.8, '好的，随时找我。'),
   customerStep(0.4, '🙏', { kind: 'emoji' }),
   agentStep(1, '另外提醒，到账前不要重复充值，避免重复扣款。'),
+  agentStep(0.4, 'By the way, the reissued diamonds will appear in your bag automatically.', { language: '英语', translation: '另外，补发的钻石会自动进入你的背包。' }),
   customerStep(0.5, 'เข้าใจแล้วค่ะ', { language: '泰语', translation: '明白了。' }),
 ];
 
@@ -675,6 +685,7 @@ const vietnameseBanSteps = (): DialogStep[] => [
   agentStep(1, '封禁期内的充值不会退还，申诉结果会短信通知。'),
   customerStep(0.4, 'Vâng, cảm ơn ad.', { language: '越南语', translation: '好的，谢谢客服。' }),
   agentStep(0.8, '有结果我在这里回复您。'),
+  agentStep(0.4, 'Please avoid any ping tools or modified clients from now on.', { language: '英语', translation: '请从现在起不要再使用任何加速或改包工具。' }),
   customerStep(0.4, '🙏', { kind: 'emoji' }),
   agentStep(0.6, '也提醒一下，后续不要使用任何改包或加速工具。'),
 ];
@@ -682,23 +693,23 @@ const vietnameseBanSteps = (): DialogStep[] => [
 /* ---------------------- AI 分流：英文礼包码兑换失败 ---------------------- */
 const englishGiftCodeAiSteps = (): DialogStep[] => [
   customerStep(0.5, 'Hi, my gift code says "code not available in this region". Can you check?', { language: '英语', translation: '你好，我的礼包码提示“该地区不可用”，能查一下吗？' }),
-  aiStep(1, 'Hi Emily, I can help. Please share the code and your server region.'),
+  aiStep(1, 'Hi Emily, I can help. Please share the code and your server region.', { language: '英语', translation: '你好 Emily，我可以帮你。请提供兑换码和你的区服。' }),
   customerStep(0.6, 'Code is IMSPORT-8891-TH, I am on the Asia server.', { language: '英语', translation: '兑换码是 IMSPORT-8891-TH，我在亚洲服。' }),
-  aiStep(1, 'Thanks. Let me check the batch and region rules.'),
-  aiStep(1.1, 'This code was issued for the Thailand launch batch and is region-locked.'),
+  aiStep(1, 'Thanks. Let me check the batch and region rules.', { language: '英语', translation: '谢谢，我先核对一下批次和区域规则。' }),
+  aiStep(1.1, 'This code was issued for the Thailand launch batch and is region-locked.', { language: '英语', translation: '这个兑换码属于泰国首发批次，有区域限制。' }),
   customerStep(0.5, 'Oh, I got it from a friend in Bangkok.', { language: '英语', translation: '哦，这是我在曼谷的朋友给我的。' }),
-  aiStep(1, 'That explains it. Region-locked codes can only be redeemed on the TH server.'),
+  aiStep(1, 'That explains it. Region-locked codes can only be redeemed on the TH server.', { language: '英语', translation: '这就对上了。区域限制的兑换码只能在泰国服兑换。' }),
   customerStep(0.5, 'Is there any way to get an equivalent reward on Asia?', { language: '英语', translation: '有没有办法在亚洲服拿到同样的奖励？' }),
-  aiStep(1.1, 'I can log a manual review request. Could you confirm your account ID?'),
+  aiStep(1.1, 'I can log a manual review request. Could you confirm your account ID?', { language: '英语', translation: '我可以提交人工复核，请确认你的账号 ID。' }),
   customerStep(0.6, 'ID 88210453, nickname NightOwl.', { language: '英语', translation: 'ID 88210453，昵称 NightOwl。' }),
-  aiStep(1.1, 'Got it. This needs a human agent to verify the code batch and issue a replacement.'),
+  aiStep(1.1, 'Got it. This needs a human agent to verify the code batch and issue a replacement.', { language: '英语', translation: '收到。这需要人工客服核实批次并补发。' }),
   transferStep(0.8, 'member-sophie', '苏菲', '跨国礼包码需人工核验'),
-  aiStep(0.5, 'I have passed this to Sophie. She will reply here within 24 hours.'),
+  aiStep(0.5, 'I have passed this to Sophie. She will reply here within 24 hours.', { language: '英语', translation: '我已经转给苏菲，她会在 24 小时内在这里回复。' }),
   customerStep(0.5, 'Thanks, appreciate it.', { language: '英语', translation: '谢谢，辛苦了。' }),
-  aiStep(1, 'No problem. Please keep the code screenshot handy.'),
+  aiStep(1, 'No problem. Please keep the code screenshot handy.', { language: '英语', translation: '没问题，请保留好兑换码截图。' }),
   customerStep(0.3, '', { attachment: image('gift-code-error.png', 356_118) }),
   customerStep(0.4, 'Screenshot attached.', { language: '英语', translation: '截图附上了。' }),
-  aiStep(0.6, 'Received. Sophie can see it in this conversation.'),
+  aiStep(0.6, 'Received. Sophie can see it in this conversation.', { language: '英语', translation: '已收到，苏菲能在这个会话里看到。' }),
 ];
 
 /* ---------------------- AI 分流：未成年人充值退款 ---------------------- */
@@ -740,6 +751,7 @@ const pendingGiftCodeSteps = (code: string, error: string): DialogStep[] => [
   customerStep(0.4, '急'),
   customerStep(0.4, '谢谢'),
   customerStep(0.5, '在线等'),
+  customerStep(0.4, 'Any update? I have been waiting all morning.', { language: '英语', translation: '有进展吗？我已经等了一上午。' }),
 ];
 
 /* ---------------------- 待分配：活动奖励未到账 ---------------------- */
@@ -799,18 +811,23 @@ const seedSessionList: DemoSession[] = [
   buildSession({
     ...WEB, actor: OWNER, assignee: owner, customerId: 'customer-10001', finalAgo: 6, id: 'session-20261104001',
     spanMinutes: 42, startUrl: 'https://support.imsports.game/orders/CS20261104', status: 'active', unread: 1,
-    steps: rechargeSteps({ amount: '¥328', channel: '微信支付', orderNo: 'RC202611038821', server: 'iOS 区服 1024' }),
+    steps: [
+      ...rechargeSteps({ amount: '¥328', channel: '微信支付', orderNo: 'RC202611038821', server: 'iOS 区服 1024' }),
+      customerStep(0.5, 'Sorry, my English is not good. Will the diamonds arrive tonight?', { language: '英语', translation: '抱歉，我英文不太好，钻石今晚能到账吗？' }),
+      agentStep(1, 'Yes, the reissue is already queued and should arrive within the hour.'),
+      customerStep(0.4, 'Great, thanks a lot!', { language: '英语', translation: '太好了，非常感谢！' }),
+    ],
   }),
   buildSession({
     ...WEB, actor: OWNER, assignee: owner, customerId: 'customer-10006', endedReason: '客户超时未回复', finalAgo: 9, id: 'session-20261104005',
     spanMinutes: 70, status: 'ended', steps: [...versionUpdateSteps(), endedStep()],
   }),
   buildSession({
-    ...CHAT, actor: OWNER, assignee: owner, customerId: 'customer-10007', endedReason: '客户问题已解决', finalAgo: 14, id: 'session-20261104006',
+    ...CHAT, actor: OWNER, assignee: owner, customerId: 'customer-10007', endedReason: '客户问题已解决', finalAgo: dayAgo(3, 14, 20), id: 'session-20261104006',
     spanMinutes: 55, status: 'ended', steps: [...rebindPhoneSteps(), endedStep()],
   }),
   buildSession({
-    ...WEB, actor: OWNER, assignee: owner, customerId: 'customer-10008', endedReason: '客户问题已解决', finalAgo: 23, id: 'session-20261104007',
+    ...WEB, actor: OWNER, assignee: owner, customerId: 'customer-10008', endedReason: '客户问题已解决', finalAgo: dayAgo(2, 21, 10), id: 'session-20261104007',
     spanMinutes: 40, status: 'ended',
     steps: [...activityRewardSteps({ activity: '七夕集卡活动', claimDate: '11 月 1 日', uid: '3058821' }), endedStep()],
   }),
@@ -820,7 +837,11 @@ const seedSessionList: DemoSession[] = [
   }),
   buildSession({
     ...CHAT, actor: OWNER, assignee: owner, customerId: 'customer-10010', finalAgo: dayAgo(1, 18, 5), id: 'session-20261104009',
-    spanMinutes: 60, status: 'active', unread: 4, steps: loginIssueSteps(),
+    spanMinutes: 60, status: 'active', unread: 4, steps: [
+      ...loginIssueSteps(),
+      customerStep(0.5, 'Do I need to change my password after the limit is lifted?', { language: '英语', translation: '限制解除后我需要改密码吗？' }),
+      agentStep(1, 'We recommend changing it once, just to be safe.'),
+    ],
   }),
 
   /* AI 成员接待：先问诊归类，再转人工 */
@@ -858,19 +879,21 @@ const seedSessionList: DemoSession[] = [
   /* 同事接待：泰语充值 / 外挂 / 登录 / 挂机 / 越南语申诉 / 账号找回 */
   buildSession({
     ...TG, actor: CHENYI, assignee: chenyi, customerId: 'customer-10005', finalAgo: 48, id: 'session-20261104004',
-    spanMinutes: 45, status: 'active', steps: thaiRechargeSteps(),
+    spanMinutes: 45, status: 'active', unread: 2, steps: thaiRechargeSteps(),
   }),
   buildSession({
-    ...WEB, actor: SOPHIE, assignee: sophie, customerId: 'customer-10011', endedReason: '客户超时未回复', finalAgo: 41, id: 'session-20261104015',
+    ...WEB, actor: SOPHIE, assignee: sophie, customerId: 'customer-10011', endedReason: '客户超时未回复', finalAgo: dayAgo(5, 10, 30), id: 'session-20261104015',
     spanMinutes: 60, status: 'ended', steps: [
       ...reportCheatSteps(),
       customerStep(0.5, '又录了一段更完整的，你看这个自瞄', { attachment: file('外挂录像补充.mp4', 12_584_220, 'video/mp4') }),
+      customerStep(0.5, 'Will his account be banned? He ruined three ranked games.', { language: '英语', translation: '他的号会被封吗？他毁了三场排位。' }),
+      agentStep(1, 'Yes. Once the review confirms the plugin, the account gets a 30-day ban.'),
       endedStep(),
     ],
   }),
   buildSession({
     ...CHAT, actor: SOPHIE, assignee: sophie, customerId: 'customer-10015', finalAgo: 44, id: 'session-20261104016',
-    spanMinutes: 50, status: 'active', steps: [
+    spanMinutes: 50, status: 'active', unread: 1, steps: [
       customerStep(0.5, '登录一直提示二次验证，但是收不到验证码'),
       agentStep(1, '您好，请确认绑定手机号是否还在使用。'),
       customerStep(0.6, '号码在用，短信一条都没收到'),
@@ -893,7 +916,7 @@ const seedSessionList: DemoSession[] = [
   }),
   buildSession({
     ...TG, actor: CHENYI, assignee: chenyi, customerId: 'customer-10017', finalAgo: 61, id: 'session-20261104017',
-    spanMinutes: 80, status: 'active', steps: reportAfkSteps(),
+    spanMinutes: 80, status: 'active', unread: 3, steps: reportAfkSteps(),
   }),
   buildSession({
     ...TG, actor: SOPHIE, assignee: sophie, customerId: 'customer-10018', finalAgo: dayAgo(1, 16, 20), id: 'session-20261104018',
@@ -984,7 +1007,7 @@ const seedSessionList: DemoSession[] = [
     ],
   }),
   buildSession({
-    ...CHAT, actor: SOPHIE, assignee: sophie, customerId: 'customer-10007', endedReason: '客户问题已解决', finalAgo: dateInYear(0, 4, 9, 11, 25),
+    ...CHAT, actor: SOPHIE, assignee: sophie, customerId: 'customer-10007', endedReason: '客户确认收到处理结果', finalAgo: dateInYear(0, 4, 9, 11, 25),
     id: 'session-20261102002', spanMinutes: 180, status: 'ended',
     steps: [
       ...giftCodeSteps({ code: 'IMSPRING-9902', error: '该兑换码已被使用', server: '区服 1024', usedServer: '区服 2048' }),
@@ -1002,12 +1025,12 @@ const seedSessionList: DemoSession[] = [
     steps: [...vietnameseRechargeSteps(), endedStep()],
   }),
   buildSession({
-    ...WEB, actor: SOPHIE, assignee: sophie, customerId: 'customer-10011', endedReason: '客户问题已解决', finalAgo: dateInYear(1, 9, 15, 11, 20),
+    ...WEB, teamId: '100003', actor: MIKA, assignee: mika, customerId: 'customer-10011', endedReason: '客户问题已解决', finalAgo: dateInYear(1, 9, 15, 11, 20),
     id: 'session-20261029001', spanMinutes: 300, status: 'ended',
     steps: [...reportCheatSteps(), endedStep()],
   }),
   buildSession({
-    ...TG, actor: CHENYI, assignee: chenyi, customerId: 'customer-10017', endedReason: '重复会话合并', finalAgo: 10000,
+    ...TG, teamId: '100003', actor: MIKA, assignee: mika, customerId: 'customer-10017', endedReason: '重复会话合并', finalAgo: 10000,
     id: 'session-20261028001', spanMinutes: 360, status: 'ended',
     steps: [
       customerStep(0.5, '又掉线了，刚那把排位直接判我逃跑'),

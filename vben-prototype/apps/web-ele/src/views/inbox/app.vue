@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DemoAttachment, DemoMessage, DemoSession, SystemEventType } from '#/features/service/demo-store';
+import type { DemoAttachment, DemoMessage, DemoSession, DemoTranslation, SystemEventType } from '#/features/service/demo-store';
 
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
@@ -40,12 +40,11 @@ const messagePane = ref<HTMLElement>();
 const detailOpen = ref(true);
 const detailCollapsed = ref(false);
 const transferOpen = ref(false);
-const endedDate = ref('');
+const endedDate = ref<[string, string] | null>(null);
 const endedHuman = ref('');
 const endedAi = ref('');
 const endedChannel = ref<ChannelType | ''>('');
 const drafts = ref<Record<string, string>>({});
-const translationMode = ref<Record<string, 'source' | 'translation'>>({});
 const previewTarget = ref('');
 const emojiOpen = ref(false);
 const fileInput = ref<HTMLInputElement>();
@@ -161,13 +160,17 @@ function matchesEndedFilters(session: DemoSession) {
   if (endedHuman.value && !(session.assigneeKind === 'human' && session.assigneeId === endedHuman.value)) return false;
   if (endedAi.value && !(session.assigneeKind === 'ai' && session.assigneeId === endedAi.value)) return false;
   if (endedChannel.value && store.sessionChannelType(session) !== endedChannel.value) return false;
-  if (endedDate.value && localDate(session.endedAt) !== endedDate.value) return false;
+  if (endedDate.value && endedDate.value.length === 2) {
+    const [start, end] = endedDate.value;
+    const endedOn = localDate(session.endedAt);
+    if (!endedOn || endedOn < start || endedOn > end) return false;
+  }
   return true;
 }
 function clearListFilters() {
   endedKeyword.value = '';
   endedTeam.value = '';
-  endedDate.value = '';
+  endedDate.value = null;
   endedHuman.value = '';
   endedAi.value = '';
   endedChannel.value = '';
@@ -229,7 +232,7 @@ watch(group, () => {
   /* PRD §3.3：切换离开「已结束」时清空关键词与筛选，再次进入不带入 */
   endedKeyword.value = '';
   endedTeam.value = '';
-  endedDate.value = '';
+  endedDate.value = null;
   endedHuman.value = '';
   endedAi.value = '';
   endedChannel.value = '';
@@ -360,32 +363,152 @@ const translation = computed(() => store.memberTranslationFor(access.currentId))
 const notification = computed(() => store.memberNotificationFor(access.currentId));
 const noticeState = computed(() => store.notificationState(access.currentId));
 const workLanguage = computed(() => translation.value.workLanguage);
-const previewLanguages = computed(() => LANGUAGES.filter((language) => language !== workLanguage.value));
+const displayMode = computed(() => translation.value.displayMode);
+// 消息级临时切换：只在当前会话有效，切换会话或显示效果设置后清空
+const tempMode = ref<Record<string, 'bilingual' | 'source' | 'translation'>>({});
+// 预览语种菜单展示全部可用语种，不再排除工作语言
+const previewLanguages = LANGUAGES;
 // 目标语种优先取本会话手动选的，其次取成员设置的访客语言
-const previewLanguage = computed(() => previewTarget.value || translation.value.visitorLanguage || previewLanguages.value[0]);
+const previewLanguage = computed(() => previewTarget.value || translation.value.visitorLanguage || LANGUAGES[0]);
 const previewLanguageCode = computed(() => {
   const language = previewLanguage.value;
   return (language && LANG_CODES[language]) || language || '';
 });
-const autoPreview = computed(() => {
-  const text = input.value.trim();
-  if (!text || !previewLanguage.value || previewLanguage.value === workLanguage.value) return undefined;
-  const result = store.previewTranslation(text, previewLanguage.value, workLanguage.value);
-  return result.error || !result.translation ? undefined : result.translation;
-});
-// PRD：成员工作语言与访客语言一致时不出现发送翻译预览
-const previewAvailable = computed(() => Boolean(previewLanguage.value && previewLanguage.value !== workLanguage.value));
-const previewKey = computed(() => `${previewLanguage.value}|${input.value.trim()}`);
-// × 只收起当前这条预览：输入内容或目标语种变化时重新出现
-const previewDismissed = ref<string | null>(null);
-const transPreviewVisible = computed(() => previewAvailable.value && previewDismissed.value !== previewKey.value);
+
+/* 发送预览状态机：开关开启后常驻；输入停止约 800ms 触发翻译，再模拟 400ms 耗时。 */
+type PreviewState = 'idle' | 'pending' | 'ready';
+const previewState = ref<PreviewState>('idle');
+const previewResult = ref<DemoTranslation>();
+// 使用译文或切换会话后的基准输入，等于它时不触发翻译，只保留「翻译为...」占位
+const previewBase = ref('');
+let previewTimer: number | undefined;
+let previewSeq = 0;
+const transPreviewVisible = computed(() => translation.value.sendTranslation);
+const previewLoading = computed(() => previewState.value === 'pending');
+const previewText = computed(() => previewResult.value?.text || '');
+const canUsePreview = computed(() => previewState.value === 'ready' && Boolean(previewResult.value?.text));
 // 目标语种菜单只有一份状态，由左端语种胶囊触发
 const langMenuOpen = ref(false);
+
+function resetPreview() {
+  if (previewTimer) window.clearTimeout(previewTimer);
+  previewTimer = undefined;
+  previewSeq += 1;
+  previewState.value = 'idle';
+  previewResult.value = undefined;
+}
+function schedulePreview() {
+  if (previewTimer) window.clearTimeout(previewTimer);
+  previewTimer = undefined;
+  previewSeq += 1;
+  const seq = previewSeq;
+  previewResult.value = undefined;
+  const text = input.value.trim();
+  const target = previewLanguage.value;
+  // 开关关闭 / 内容为空 / 与工作语言相同 / 刚使用过译文：保留占位，跳过翻译
+  if (!translation.value.sendTranslation || !text || !target || target === workLanguage.value || input.value === previewBase.value) {
+    previewState.value = 'idle';
+    return;
+  }
+  // 防抖期间保持占位：800ms 到点后才进入加载态
+  previewState.value = 'idle';
+  previewTimer = window.setTimeout(() => {
+    previewState.value = 'pending';
+    window.setTimeout(() => {
+      // 只接收「最新输入 + 最新语种」的结果，过期结果直接丢弃
+      if (seq !== previewSeq || input.value.trim() !== text || previewLanguage.value !== target) return;
+      const result = store.previewTranslation(text, target, workLanguage.value);
+      if (result.error || !result.translation) {
+        previewState.value = 'idle';
+        ElMessage.warning('翻译失败，请重试');
+        return;
+      }
+      previewResult.value = result.translation;
+      previewState.value = 'ready';
+    }, 400);
+  }, 800);
+}
+watch(input, schedulePreview);
+watch(previewLanguage, schedulePreview);
+watch(displayMode, () => { tempMode.value = {}; });
+watch(() => translation.value.sendTranslation, (enabled) => {
+  if (enabled) schedulePreview();
+  else resetPreview();
+});
+
+/* 接收侧自动翻译：只处理「打开会话之后新追加」的客户文本消息。 */
+const messageCursor = ref(0);
+const isForeground = () => document.visibilityState === 'visible' && document.hasFocus();
+function messageLanguage(message: DemoMessage) {
+  return message.originalLanguage || (/\p{Script=Han}/u.test(message.content) ? '简体中文' : '英语');
+}
+function autoTranslatePending(pending: DemoMessage[]) {
+  const session = active.value;
+  if (!session || !translation.value.receiveTranslation || session.status === 'ended' || !isForeground()) return;
+  const target = workLanguage.value;
+  pending
+    .filter((message) => message.role === 'customer' && message.kind === 'text' && !store.isSystemEvent(message))
+    .filter((message) => messageLanguage(message) !== target)
+    .forEach((message) => store.translateMessage(message.id, target, access.currentId));
+}
+watch(active, (session, previous) => {
+  if (previous && previous.id !== session?.id) drafts.value[previous.id] = input.value;
+  input.value = session ? drafts.value[session.id] || '' : '';
+  // 恢复草稿但不保留上次译文：占位等待再次输入
+  previewBase.value = input.value;
+  previewTarget.value = '';
+  langMenuOpen.value = false;
+  emojiOpen.value = false;
+  tempMode.value = {};
+  messageCursor.value = session?.messages.length || 0;
+  resetPreview();
+  if (!session) return;
+  if (session.assigneeId === access.currentId && session.assigneeKind === 'human') store.markRead(session.id, access.currentId);
+  nextTick(() => { if (messagePane.value) messagePane.value.scrollTop = messagePane.value.scrollHeight; });
+}, { immediate: true });
+watch(() => active.value?.messages.length, () => {
+  const session = active.value;
+  if (!session) return;
+  // 失焦期间同样推进游标：回来不补翻历史
+  const pending = session.messages.slice(messageCursor.value);
+  messageCursor.value = session.messages.length;
+  autoTranslatePending(pending);
+  nextTick(() => { if (messagePane.value) messagePane.value.scrollTop = messagePane.value.scrollHeight; });
+});
+
+/* 消息级翻译：缓存命中直接出译文；未命中走 650ms 加载态，期间不可重复触发。 */
+const translating = ref<Record<string, boolean>>({});
+const translationTimers = new Map<string, number>();
+const isPureEmoji = (text: string) => {
+  const rest = text.replace(/[\p{Extended_Pictographic}\u200D\uFE0F\s]/gu, '');
+  return rest.length === 0 && /\p{Extended_Pictographic}/u.test(text);
+};
+function translateMessage(message: DemoMessage) {
+  if (message.role !== 'customer' || translating.value[message.id]) return;
+  const target = workLanguage.value;
+  if (message.translations?.[target]) {
+    const cached = store.translateMessage(message.id, target, access.currentId);
+    if (cached.error) ElMessage.warning('翻译失败，请重试');
+    return;
+  }
+  translating.value[message.id] = true;
+  translationTimers.set(message.id, window.setTimeout(() => {
+    translating.value[message.id] = false;
+    translationTimers.delete(message.id);
+    const result = store.translateMessage(message.id, target, access.currentId);
+    if (result.error || !result.translation) ElMessage.warning('翻译失败，请重试');
+  }, 650));
+}
+onBeforeUnmount(() => {
+  translationTimers.forEach((timerId) => window.clearTimeout(timerId));
+  if (previewTimer) window.clearTimeout(previewTimer);
+});
+
 function toggleLangMenu() {
   langMenuOpen.value = !langMenuOpen.value;
 }
 function selectPreviewLanguage(language: string) {
-  changePreviewTarget(language);
+  previewTarget.value = language;
   langMenuOpen.value = false;
 }
 function onLangMenuPointerDown(event: PointerEvent) {
@@ -396,68 +519,42 @@ function onLangMenuPointerDown(event: PointerEvent) {
 }
 window.addEventListener('pointerdown', onLangMenuPointerDown);
 watch(transPreviewVisible, (value) => { if (!value) langMenuOpen.value = false; });
-// 客户消息语言与成员工作语言不一致时自动翻译；一致时不出现翻译入口
-function autoTranslate() {
-  if (!active.value) return;
-  active.value.messages
-    .filter((message) => message.role === 'customer' && message.kind === 'text' && !store.isSystemEvent(message) && message.originalLanguage && !message.translation)
-    .filter((message) => message.originalLanguage !== translation.value.workLanguage)
-    .forEach((message) => store.translateMessage(message.id, translation.value.workLanguage));
-}
-watch(active, (session, previous) => {
-  if (previous && previous.id !== session?.id) drafts.value[previous.id] = input.value;
-  input.value = session ? drafts.value[session.id] || '' : '';
-  previewTarget.value = '';
-  previewDismissed.value = null;
-  langMenuOpen.value = false;
-  emojiOpen.value = false;
-  if (!session) return;
-  if (session.assigneeId === access.currentId && session.assigneeKind === 'human') store.markRead(session.id, access.currentId);
-  autoTranslate();
-  nextTick(() => { if (messagePane.value) messagePane.value.scrollTop = messagePane.value.scrollHeight; });
-}, { immediate: true });
-watch(() => active.value?.messages.length, () => {
-  autoTranslate();
-  nextTick(() => { if (messagePane.value) messagePane.value.scrollTop = messagePane.value.scrollHeight; });
-});
-watch(workLanguage, () => autoTranslate());
-
-function translateMessage(message: DemoMessage) {
-  const result = store.translateMessage(message.id, workLanguage.value);
-  if (result.error) return ElMessage.warning(result.error);
-  translationMode.value[message.id] = 'translation';
-}
-function changePreviewTarget(value: string) {
-  previewTarget.value = value;
-  previewDismissed.value = null;
-}
 function usePreview() {
-  const text = autoPreview.value?.text;
-  if (!text) return;
-  input.value = text;
-  previewDismissed.value = previewKey.value;
-  langMenuOpen.value = false;
-  ElMessage.success('已使用译文');
-}
-function dismissPreview() {
-  previewDismissed.value = previewKey.value;
+  if (!canUsePreview.value || !previewResult.value) return;
+  input.value = previewResult.value.text;
+  // 使用后保留预览区占位，不清空输入框、不发送
+  previewBase.value = input.value;
+  resetPreview();
   langMenuOpen.value = false;
 }
-function messageMode(message: DemoMessage): 'source' | 'translation' {
-  return translationMode.value[message.id] || (message.translation ? 'translation' : 'source');
+
+/* 展示许可：译文缓存存在，且本人触发过翻译，才展示 */
+function translationOf(message: DemoMessage) {
+  const cached = message.translations?.[workLanguage.value];
+  if (!cached || !message.translatedBy?.includes(access.currentId)) return undefined;
+  return cached;
 }
-function setMessageMode(message: DemoMessage, mode: 'source' | 'translation') {
-  translationMode.value[message.id] = mode;
+function messageMode(message: DemoMessage): 'bilingual' | 'source' | 'translation' {
+  const temp = tempMode.value[message.id];
+  if (temp) return temp;
+  if (!translationOf(message)) return 'source';
+  return displayMode.value === 'bilingual' ? 'bilingual' : 'translation';
 }
-function toggleTranslation(message: DemoMessage) {
-  if (!message.translation) {
-    translateMessage(message);
-    return;
-  }
-  setMessageMode(message, messageMode(message) === 'translation' ? 'source' : 'translation');
+function toggleMessageMode(message: DemoMessage) {
+  // 已隐藏译文时再点恢复当前显示效果；否则临时只留原文
+  if (messageMode(message) === 'source') delete tempMode.value[message.id];
+  else tempMode.value[message.id] = 'source';
 }
-function displayText(message: DemoMessage) {
-  return store.messageText(message, messageMode(message));
+function translationText(message: DemoMessage) {
+  return translationOf(message)?.text || message.content;
+}
+// 可翻译入口：仅客户发送的文本消息（PRD 补充条款：成员己方与 AI 消息不提供手动翻译入口）
+function canTranslate(message: DemoMessage) {
+  if (message.role !== 'customer') return false;
+  if (message.kind !== 'text' || store.isSystemEvent(message)) return false;
+  if (!message.content.trim() || isPureEmoji(message.content)) return false;
+  if (message.translations?.[workLanguage.value]) return true;
+  return messageLanguage(message) !== workLanguage.value;
 }
 function addEmoji(emoji: string) {
   input.value += emoji;
@@ -483,6 +580,9 @@ function send() {
   const outcome = sendOutgoing(content, 'text');
   if (outcome === 'sent') store.markRead(active.value.id, access.currentId);
   input.value = '';
+  previewTarget.value = '';
+  previewBase.value = '';
+  resetPreview();
   if (active.value) drafts.value[active.value.id] = '';
 }
 function pickFiles() {
@@ -591,7 +691,7 @@ function closePreview() {
 function zoomBy(delta: number) {
   previewScale.value = Math.min(4, Math.max(0.5, Math.round((previewScale.value + delta) * 100) / 100));
 }
-function resetPreview() {
+function resetMediaZoom() {
   previewScale.value = 1;
 }
 function onPreviewWheel(event: WheelEvent) {
@@ -627,11 +727,6 @@ function bubbleClass(message: DemoMessage) {
   if (message.role === 'ai') return 'is-ai';
   if (message.role === 'agent') return message.senderId === access.currentId ? 'is-me' : 'is-agent';
   return 'is-customer';
-}
-function canTranslate(message: DemoMessage) {
-  return Boolean(message.originalLanguage)
-    && message.role === 'customer' && message.kind === 'text' && !isSystem(message)
-    && message.originalLanguage !== translation.value.workLanguage;
 }
 const isFailed = (message: DemoMessage) => message.status === 'failed' || message.success === false;
 /* 重试只恢复本地状态并刷新时间，不做真实发送 */
@@ -711,20 +806,20 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
         <span class="rail-title">聊天</span>
       </header>
       <nav class="rail-groups" aria-label="会话分组">
-        <button v-if="showAssigned || showPending" class="rail-row" :class="{ active: group === 'all' }" @click="group = 'all'">
-          <QiInbox :size="14" /><span>全部</span><b v-if="groupCounts.all" class="count">{{ groupCounts.all }}</b>
-        </button>
         <button v-if="showAssigned" class="rail-row" :class="{ active: group === 'mine' }" @click="group = 'mine'">
           <QiUser :size="14" /><span>我的</span><b v-if="groupCounts.mine" class="count">{{ groupCounts.mine }}</b>
         </button>
         <button v-if="showPending" class="rail-row" :class="{ active: group === 'pending' }" @click="group = 'pending'">
           <QiClock :size="14" /><span>待分配</span><b v-if="groupCounts.pending" class="count">{{ groupCounts.pending }}</b>
         </button>
+        <button v-if="showAssigned" class="rail-row" :class="{ active: group === 'ai' }" @click="group = 'ai'">
+          <QiRobot :size="14" /><span>AI 成员</span><b v-if="groupCounts.ai" class="count">{{ groupCounts.ai }}</b>
+        </button>
         <button v-if="showAssigned" class="rail-row" :class="{ active: group === 'colleagues' }" @click="group = 'colleagues'">
           <QiUser3 :size="14" /><span>同事</span><b v-if="groupCounts.colleagues" class="count">{{ groupCounts.colleagues }}</b>
         </button>
-        <button v-if="showAssigned" class="rail-row" :class="{ active: group === 'ai' }" @click="group = 'ai'">
-          <QiRobot :size="14" /><span>AI 成员</span><b v-if="groupCounts.ai" class="count">{{ groupCounts.ai }}</b>
+        <button v-if="showAssigned || showPending" class="rail-row" :class="{ active: group === 'all' }" @click="group = 'all'">
+          <QiInbox :size="14" /><span>全部</span><b v-if="groupCounts.all" class="count">{{ groupCounts.all }}</b>
         </button>
         <button v-if="showEnded" class="rail-row" :class="{ active: group === 'ended' }" @click="group = 'ended'">
           <QiArchive :size="14" /><span>已结束</span>
@@ -737,7 +832,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
         <header class="list-head">
           <h2>会话列表</h2>
           <span v-if="groupCount > 0" class="list-head-count">{{ groupCount }}</span>
-          <ElPopover v-if="group === 'ended'" v-model:visible="filterOpen" placement="bottom-end" trigger="click" :width="340" :offset="8" :show-arrow="false" popper-class="inbox-filter-popper">
+          <ElPopover v-if="group === 'ended'" v-model:visible="filterOpen" placement="bottom-end" trigger="click" :width="400" :offset="8" :show-arrow="false" popper-class="inbox-filter-popper">
             <template #reference>
               <button type="button" class="list-filter-btn" aria-label="筛选会话" :aria-expanded="filterOpen">
                 <svg class="filter-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M1.4 2h9.2l-3.5 4.2v3.9l-2.2-1.2V6.2L1.4 2Z" /></svg>
@@ -774,8 +869,8 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
               </div>
               <div class="filter-group-label">时间</div>
               <div class="filter-row">
-                <span class="filter-label">结束日期</span>
-                <ElDatePicker v-model="endedDate" type="date" value-format="YYYY-MM-DD" placeholder="全部日期" clearable class="filter-control filter-date" :teleported="false" />
+                <span class="filter-label">日期</span>
+                <ElDatePicker v-model="endedDate" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始" end-placeholder="结束" range-separator="－" clearable class="filter-control filter-date" :teleported="false" />
               </div>
               <div class="filter-footer">
                 <span v-if="activeFilterCount" class="filter-summary">已生效 {{ activeFilterCount }} 项</span>
@@ -901,7 +996,12 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
                       <small>{{ formatFileSize(message.attachment?.size) }}</small>
                     </div>
                   </div>
-                  <p v-else class="bubble-text">{{ displayText(message) }}</p>
+                  <div v-else-if="messageMode(message) === 'bilingual'" class="bubble-text bubble-bilingual">
+                    <p class="bubble-line">{{ message.content }}</p>
+                    <span class="bubble-divider" aria-hidden="true"></span>
+                    <p class="bubble-line is-translation">{{ translationText(message) }}</p>
+                  </div>
+                  <p v-else class="bubble-text">{{ messageMode(message) === 'translation' ? translationText(message) : message.content }}</p>
                   <div class="bubble-meta">
                     <span>{{ formatChatTime(message.sentAt) }}</span>
                     <span v-if="isFailed(message)" class="failed-text">发送失败</span>
@@ -909,14 +1009,23 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
                   </div>
                 </div>
                 <button
-                  v-if="canTranslate(message)"
+                  v-if="canTranslate(message) && !translationOf(message)"
                   type="button"
                   class="msg-translate"
-                  :class="{ 'is-active': messageMode(message) === 'translation' }"
-                  :aria-label="messageMode(message) === 'translation' ? '切换为原文' : '切换为译文'"
-                  @click="toggleTranslation(message)"
+                  :class="{ 'is-loading': translating[message.id] }"
+                  title="翻译"
+                  aria-label="翻译"
+                  :disabled="Boolean(translating[message.id])"
+                  @click="translateMessage(message)"
                 >
-                  <QiTranslate :size="15" />
+                  <span v-if="translating[message.id]" class="msg-translate-spinner" aria-hidden="true"></span>
+                  <QiTranslate v-else :size="15" />
+                </button>
+              </div>
+              <div v-if="canTranslate(message) && translationOf(message)" class="msg-translation-status">
+                <span class="status-label">文本已翻译</span>
+                <button type="button" class="status-btn" @click="toggleMessageMode(message)">
+                  {{ messageMode(message) === 'source' ? '显示译文' : messageMode(message) === 'bilingual' ? '隐藏译文' : '显示原文' }}
                 </button>
               </div>
             </div>
@@ -957,11 +1066,11 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
               </button>
             </div>
           </div>
-          <span v-if="autoPreview" class="trans-text">{{ autoPreview.text }}</span>
+          <span v-if="previewLoading" class="trans-text is-loading">翻译中...</span>
+          <span v-else-if="previewText" class="trans-text">{{ previewText }}</span>
           <span v-else class="trans-placeholder">翻译为...</span>
           <div class="trans-actions">
-            <button v-if="autoPreview" type="button" class="trans-use" @click="usePreview">使用</button>
-            <button v-else type="button" class="trans-close" aria-label="关闭翻译预览" @click="dismissPreview">×</button>
+            <button type="button" class="trans-use" :disabled="!canUsePreview" @click="usePreview">使用</button>
           </div>
         </div>
         <div class="composer-box" :class="{ 'is-disabled': !canSend }">
@@ -969,7 +1078,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
             v-model="input"
             class="composer-input"
             rows="3"
-            :placeholder="canSend ? '输入自己熟悉语言' : '当前渠道不可回复，历史消息仍可查看'"
+            :placeholder="canSend ? '输入消息，Enter 发送，Shift + Enter 换行' : '当前渠道不可回复，历史消息仍可查看'"
             :disabled="!canSend"
             @keydown.enter.exact.prevent="send"
           ></textarea>
@@ -1038,7 +1147,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
           <button type="button" aria-label="缩小" @click="zoomBy(-0.2)">−</button>
           <span>{{ Math.round(previewScale * 100) }}%</span>
           <button type="button" aria-label="放大" @click="zoomBy(0.2)">+</button>
-          <button type="button" class="media-zoom-reset" @click="resetPreview">还原</button>
+          <button type="button" class="media-zoom-reset" @click="resetMediaZoom">还原</button>
         </div>
       </div>
     </Teleport>
@@ -1280,17 +1389,25 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
 .msg-main { display: flex; flex-direction: column; gap: 5px; max-width: 72%; min-width: 0; width: fit-content; align-items: flex-start; }
 .msg-row.agent .msg-main, .msg-row.ai .msg-main { align-items: flex-end; }
 .msg-sender { padding: 0 2px; color: #62626d; font-size: 12px; line-height: 1.4; }
-.bubble-shell { display: flex; align-items: center; gap: 8px; max-width: 100%; }
+.bubble-shell { display: flex; align-items: flex-start; gap: 8px; max-width: 100%; }
 .bubble { padding: 12px 16px; color: #131317; background: #f3f3f3; border-radius: 16px; }
 .bubble.is-me, .bubble.is-agent, .bubble.is-ai { background: #f7f4ff; }
 .bubble-text { margin: 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* 双语：同一个气泡内原文在上、浅色分隔线、译文在下 */
+.bubble-bilingual { display: grid; gap: 8px; }
+.bubble-line { margin: 0; font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bubble-divider { display: block; height: 1px; background: #e3e3e5; }
 .bubble-meta { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; color: #8c8c8e; font-size: 11px; }
-.msg-translate { display: grid; flex: 0 0 auto; width: 28px; height: 28px; padding: 0; color: #8c8c8e; cursor: pointer; background: transparent; border: 0; border-radius: 8px; opacity: 0; visibility: hidden; transition: opacity 0.13s ease, visibility 0.13s ease, color 0.15s ease, background-color 0.15s ease; }
-.msg-translate:hover { color: #131317; background: #ececee; }
-.msg-translate.is-active { color: #131317; background: #f7f4ff; }
-/* 悬浮气泡（含外侧图标区）或键盘 focus 时才显示；已翻译态常显 */
-.bubble-shell:hover .msg-translate, .bubble-shell:focus-within .msg-translate, .msg-translate.is-active { opacity: 1; visibility: visible; }
-.msg-row.agent .msg-translate, .msg-row.ai .msg-translate { order: -1; }
+.msg-translate { display: grid; flex: 0 0 auto; width: 28px; height: 28px; padding: 0; place-items: center; color: #62626d; cursor: pointer; background: #fff; border: 1px solid #e3e3e5; border-radius: 8px; box-shadow: 0 2px 6px rgb(19 19 23 / 8%); opacity: 0; visibility: hidden; transition: opacity 0.13s ease, visibility 0.13s ease, color 0.15s ease, border-color 0.15s ease; }
+.msg-translate:hover:not(:disabled) { color: #003fa4; border-color: #c2cad9; }
+.msg-translate:disabled { cursor: default; }
+.msg-translate-spinner { width: 14px; height: 14px; border: 2px solid #d6dce8; border-top-color: #003fa4; border-radius: 50%; animation: msg-translate-spin 0.7s linear infinite; }
+@keyframes msg-translate-spin { to { transform: rotate(360deg); } }
+/* 悬浮气泡（含外侧图标区）或键盘 focus 时才显示 */
+.bubble-shell:hover .msg-translate, .bubble-shell:focus-within .msg-translate { opacity: 1; visibility: visible; }
+.msg-translation-status { display: flex; gap: 6px; align-items: baseline; padding: 0 2px; color: #8c8c8e; font-size: 11px; line-height: 16px; }
+.status-btn { padding: 0; color: #003fa4; font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; background: transparent; border: 0; }
+.status-btn:hover { text-decoration: underline; }
 .retry-btn { padding: 0; color: #62626d; font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; background: transparent; border: 0; }
 .retry-btn:hover { color: #131317; }
 .failed-text { color: var(--danger); }
@@ -1355,12 +1472,12 @@ a.attachment-name { text-decoration: underline; }
 .trans-lang-option.is-selected { color: #003fa4; font-weight: 500; }
 .trans-lang-check { min-width: 12px; color: #003fa4; font-size: 12px; text-align: right; }
 .trans-text { flex: 1; min-width: 0; overflow: hidden; color: #131317; font-size: 13px; line-height: 18px; white-space: nowrap; text-overflow: ellipsis; }
+.trans-text.is-loading { color: #8c8c8e; }
 .trans-placeholder { flex: 1; min-width: 0; color: #8c8c8e; font-size: 13px; line-height: 18px; }
 .trans-actions { display: flex; flex: 0 0 auto; align-items: center; }
 .trans-use { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; color: #003fa4; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; background: transparent; border: 0; border-radius: 6px; }
-.trans-use:hover { background: #eef1f7; }
-.trans-close { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; color: #8c8c8e; font-size: 16px; line-height: 1; cursor: pointer; background: transparent; border: 0; border-radius: 6px; }
-.trans-close:hover { color: #131317; background: #ececee; }
+.trans-use:hover:not(:disabled) { background: #eef1f7; }
+.trans-use:disabled { color: #a7b0c2; cursor: not-allowed; }
 .takeover-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; box-sizing: border-box; padding: 16px 18px; border-top: 1px solid var(--line); }
 .takeover-copy { max-width: 64%; margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
 .takeover-btn { flex: 0 0 auto; min-width: 96px; }

@@ -53,7 +53,10 @@ export interface DemoMessage {
   sentAt: string;
   status?: MessageStatus;
   success: boolean;
-  translation?: DemoTranslation;
+  /** 按目标语言保存的多份译文缓存；缓存存在不等于自动展示。 */
+  translations?: Record<string, DemoTranslation>;
+  /** 触发过该消息翻译的成员，只有本人在列表里时才展示译文。 */
+  translatedBy?: string[];
 }
 
 export interface DemoAccessInfo {
@@ -136,6 +139,8 @@ export interface NotificationTrigger {
 }
 
 export interface MemberTranslationSettings {
+  /** 接收消息译文展示方式：仅译文，或原文与译文双语对照。 */
+  displayMode: 'bilingual' | 'translation-only';
   receiveTranslation: boolean;
   sendTranslation: boolean;
   visitorLanguage: string;
@@ -170,9 +175,9 @@ export interface NotificationState extends MemberNotificationSettings {
   lastTrigger?: NotificationTrigger;
 }
 
-// v4 种子数据换成游戏客服场景，升级 key 后旧数据直接丢弃，避免浏览器里残留的通用售后会话遮住新种子。
-const KEY = 'im-support-vben:service-demo-v7';
-const LEGACY_KEYS = ['im-support-vben:service-demo-v6', 'im-support-vben:service-demo-v5', 'im-support-vben:service-demo-v4', 'im-support-vben:service-demo-v3', 'im-support-vben:service-demo-v2', 'im-support-vben:service-demo-v1'];
+// v9 译文缓存改为按目标语言多份并记录触发成员；升级 key 后旧数据直接丢弃，避免旧单槽译文遮住新种子。
+const KEY = 'im-support-vben:service-demo-v9';
+const LEGACY_KEYS = ['im-support-vben:service-demo-v8', 'im-support-vben:service-demo-v7', 'im-support-vben:service-demo-v6', 'im-support-vben:service-demo-v5', 'im-support-vben:service-demo-v4', 'im-support-vben:service-demo-v3', 'im-support-vben:service-demo-v2', 'im-support-vben:service-demo-v1'];
 const LANGUAGES = ['简体中文', '繁体中文', '英语', '越南语', '泰语', '高棉语', '缅甸语', '老挝语', '西班牙语'];
 const nowIso = () => new Date().toISOString();
 const clone = <T>(value: T): T => structuredClone(value);
@@ -213,11 +218,27 @@ function loadState(): Partial<PersistedState> {
   return {};
 }
 
+/**
+ * 聊天页顶栏按「最近活跃 < 10 分钟」判定在线。种子只写死三位固定客户，
+ * 每次加载把他们的活跃时间刷新到 10 分钟窗口内，保证刷新后在线/离线组合稳定，不使用随机数。
+ */
+const ONLINE_PRESENCE_MINUTES: Record<string, number> = {
+  'customer-10001': 3,
+  'customer-10002': 5,
+  'customer-10006': 8,
+};
+const applyPresence = (list: DemoCustomer[]): DemoCustomer[] => list.map((customer) => {
+  const minutesAgo = ONLINE_PRESENCE_MINUTES[customer.id];
+  return minutesAgo === undefined
+    ? customer
+    : { ...customer, lastActive: new Date(Date.now() - minutesAgo * 60_000).toISOString() };
+});
+
 export const useDemoServiceStore = defineStore('demo-service', () => {
   const team = useTeamStore();
   const channels = useChannelStore();
   const saved = loadState();
-  const customers = ref<DemoCustomer[]>(Array.isArray(saved.customers) && saved.customers.length > 0 ? saved.customers : clone(seedCustomers));
+  const customers = ref<DemoCustomer[]>(applyPresence(Array.isArray(saved.customers) && saved.customers.length > 0 ? saved.customers : clone(seedCustomers)));
   const sessions = ref<DemoSession[]>(Array.isArray(saved.sessions) && saved.sessions.length > 0 ? saved.sessions : seedSessions());
   const reception = ref<ReceptionSettings>(saved.reception || {
     browserNotification: false, firstResponseMinutes: 2, inactiveCloseMinutes: 10, receiveTranslation: false,
@@ -255,7 +276,9 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
     .slice(0, limit);
 
   const defaultNotification = (): MemberNotificationSettings => ({ browserNotification: false, sound: true, titleBlink: true });
-  const defaultTranslation = (): MemberTranslationSettings => ({ receiveTranslation: false, sendTranslation: false, visitorLanguage: '英语', workLanguage: '简体中文' });
+  const defaultTranslation = (): MemberTranslationSettings => ({
+    displayMode: 'translation-only', receiveTranslation: false, sendTranslation: false, visitorLanguage: '英语', workLanguage: '简体中文',
+  });
   const memberNotificationFor = (memberId: string): MemberNotificationSettings => ({ ...defaultNotification(), ...memberNotifications.value[memberId] });
   const memberTranslationFor = (memberId: string): MemberTranslationSettings => ({ ...defaultTranslation(), ...memberTranslations.value[memberId] });
   const settingsFor = (memberId: string): PersonalSettings => personal.value[memberId] || {
@@ -390,6 +413,13 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
     return undefined;
   }
 
+  /** 渠道删除时批量结束其下所有未结束会话：写入结束原因与时间，历史展示沿用渠道快照名称。 */
+  function endSessionsByChannel(channelId: string, reason = '渠道已删除') {
+    const affected = sessions.value.filter((session) => session.channelId === channelId && session.status !== 'ended');
+    affected.forEach((session) => end(session.id, reason));
+    return affected.length;
+  }
+
   function translateText(content: string, targetLanguage: string) {
     const language = normalizeLanguage(targetLanguage);
     if (!LANGUAGES.includes(language)) return { error: '该语言暂不可用。' };
@@ -400,18 +430,29 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
     return { generated: true, language, text: corpusTranslation(content, language) };
   }
 
-  function translateMessage(messageId: string, targetLanguage: string): TranslationResult {
+  /**
+   * 翻译一条消息。缓存按「原消息 + 目标语言」多份保存；命中缓存时直接复用，不重新生成。
+   * 传入 memberId 时，把该成员记入 translatedBy——这是「共享缓存不等于自动展示」的展示许可。
+   */
+  function translateMessage(messageId: string, targetLanguage: string, memberId?: string): TranslationResult {
     const message = sessions.value.flatMap((session) => session.messages).find((item) => item.id === messageId);
     if (!message) return { error: '消息不存在。' };
     if (isSystemEvent(message) || (message.kind && message.kind !== 'text')) return { error: '仅支持文本业务消息翻译。' };
-    const result = translateText(message.content, targetLanguage);
+    const language = normalizeLanguage(targetLanguage);
+    const cached = message.translations?.[language];
+    if (cached) {
+      if (memberId && !message.translatedBy?.includes(memberId)) message.translatedBy = [...(message.translatedBy || []), memberId];
+      return { translation: cached };
+    }
+    const result = translateText(message.content, language);
     if (result.error || !result.text) return { error: result.error };
     const translation: DemoTranslation = {
       generated: result.generated,
       sourceLanguage: message.originalLanguage || (message.role === 'customer' ? '英语' : '简体中文'),
       targetLanguage: result.language!, text: result.text, translatedAt: nowIso(),
     };
-    message.translation = translation;
+    message.translations = { ...(message.translations || {}), [result.language!]: translation };
+    if (memberId && !message.translatedBy?.includes(memberId)) message.translatedBy = [...(message.translatedBy || []), memberId];
     return { translation };
   }
 
@@ -423,8 +464,8 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
     };
   }
 
-  const messageText = (message: DemoMessage, mode: 'source' | 'translation' = 'source') => mode === 'translation'
-    ? message.translation?.text || message.content
+  const messageText = (message: DemoMessage, mode: 'source' | 'translation' = 'source', targetLanguage = '简体中文') => mode === 'translation'
+    ? message.translations?.[normalizeLanguage(targetLanguage)]?.text || message.content
     : message.content;
 
   function setMemberTranslation(memberId: string, patch: Partial<MemberTranslationSettings>) {
@@ -598,7 +639,7 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
   }
 
   return {
-    assign, autoAssign, consumeNotification, customerById, customerSessions, customers, end, ingestCustomerMessage, isSystemEvent,
+    assign, autoAssign, consumeNotification, customerById, customerSessions, customers, end, endSessionsByChannel, ingestCustomerMessage, isSystemEvent,
     lastMessage, markRead, memberNotificationFor, memberNotifications, memberTranslationFor, memberTranslations, messageText,
     notificationState, personal, previewTranslation, reception, recall, recentSessions, send, sessionById, sessionChannel,
     sessionChannelType, sessionInfo, sessions, setMemberNotification, setMemberTranslation, setPending, settingsFor, takeover, takeoverCheck,
