@@ -516,9 +516,16 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
           <h2>{{ detailMembers.length }} 名成员</h2>
           <ElButton v-if="canEditDetail" type="primary" @click="openMemberPicker(detailTeam)"><QIcon name="plus" :size="16" />添加成员</ElButton>
         </div>
-        <ElInput v-model="keyword" clearable placeholder="搜索团队成员" class="team-search" />
+        <ElInput v-model="keyword" clearable placeholder="搜索团队成员" class="team-search">
+          <template #prefix>
+            <svg class="team-search-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="6.8" cy="6.8" r="4.6" />
+              <path d="M10.3 10.3 14 14" />
+            </svg>
+          </template>
+        </ElInput>
         <div class="team-table-viewport"><ElTable height="100%" :data="detailMembers.filter((member) => `${member.name}${member.account || member.id}`.toLowerCase().includes(keyword.toLowerCase()))" class="ui-table" empty-text="未找到符合条件的成员">
-          <ElTableColumn label="名称" min-width="300">
+          <ElTableColumn label="成员" min-width="300">
             <template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.name }}</b><small>{{ scope.row.account || scope.row.id }}</small></span></span></template>
           </ElTableColumn>
           <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="ui-tag" :class="scope.row.kind === 'ai' ? 'is-outline is-ai' : 'is-neutral'">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>

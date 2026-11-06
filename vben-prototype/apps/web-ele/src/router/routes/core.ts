@@ -66,6 +66,18 @@ const coreRoutes: RouteRecordRaw[] = [
             meta: { icon: qicon('team'), title: '角色配置' },
           },
           {
+            name: 'TeamRoleCreate',
+            path: 'roles/create',
+            component: () => import('#/views/team/app.vue'),
+            meta: { hideInMenu: true, hideInTab: true, title: '角色创建' },
+          },
+          {
+            name: 'TeamRoleEditor',
+            path: 'roles/:id',
+            component: () => import('#/views/team/app.vue'),
+            meta: { hideInMenu: true, hideInTab: true, title: '编辑角色' },
+          },
+          {
             name: 'TeamMembers',
             path: 'members',
             redirect: '/team/members/all',

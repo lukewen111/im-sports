@@ -131,7 +131,12 @@
 .team-identity > label .el-input { width: 100%; }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 24px 0 14px; }
 .section-heading h2 { margin: 0; font-size: 16px; font-weight: 600; }
-.team-detail > .team-search { margin-bottom: 14px; }
+.team-detail > .team-search { width: 140px; height: 32px; flex: 0 0 auto; align-self: flex-start; margin-bottom: 14px; }
+.team-detail > .team-search .el-input__wrapper { min-height: 32px; padding: 0 10px; border-radius: 6px; }
+.team-detail > .team-search .el-input__prefix-inner > :last-child { margin-right: 6px; }
+.team-detail > .team-search .team-search-icon { width: 14px; height: 14px; fill: none; stroke: #8C8C8E; stroke-width: 1.3; }
+/* 空值时不预留清空图标宽度，保证占位文案在 140px 内完整显示 */
+.team-detail > .team-search:has(.el-input__inner:placeholder-shown) .el-input__suffix { width: 0; }
 .adam-card { display: grid; gap: 18px; padding: 24px; background: var(--ui-surface); border: 1px solid var(--ui-line); border-radius: var(--ui-radius-card); box-shadow: none; }
 .ai-method-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(280px, .85fr); align-items: stretch; gap: 12px; }
 .webhook-method-card { display: flex; min-height: 100%; flex-direction: column; align-items: flex-start; gap: 16px; padding: 24px; background: var(--ui-surface); border: 1px solid var(--ui-line); border-radius: var(--ui-radius-card); box-shadow: none; }
@@ -223,6 +228,7 @@
   .toolbar { flex-wrap: wrap; }
   .toolbar .el-select { flex: 0 0 140px; }
   .team-search { width: 128px; flex: 0 0 128px; }
+  .team-detail > .team-search { width: 128px; flex-basis: auto; }
 }
 
 @media (max-width: 900px) {
