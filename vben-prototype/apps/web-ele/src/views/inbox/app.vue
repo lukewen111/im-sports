@@ -880,7 +880,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
           </ElPopover>
         </header>
         <div v-if="group === 'ended'" class="list-search">
-          <ElInput v-model="endedKeyword" clearable placeholder="搜索聊天、客户或会话 ID" class="list-search-input" />
+          <ElInput v-model="endedKeyword" clearable placeholder="搜索聊天" class="list-search-input" />
         </div>
         <div class="conv-list">
           <button

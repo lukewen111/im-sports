@@ -257,7 +257,7 @@ function rowClassName({ row }: { row: DemoCustomer }) {
         </header>
 
         <div class="toolbar">
-          <ElInput v-model="keyword" clearable placeholder="搜索客户名称、客户 ID、邮箱或手机号" class="search-input">
+          <ElInput v-model="keyword" clearable placeholder="搜索客户名称" class="search-input">
             <template #prefix>
               <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true">
                 <circle cx="6.8" cy="6.8" r="4.6" />

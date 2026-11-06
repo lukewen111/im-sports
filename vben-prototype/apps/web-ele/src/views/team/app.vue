@@ -548,7 +548,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
 
       <section class="team-content">
         <div class="toolbar">
-          <ElInput v-model="keyword" clearable :placeholder="currentView === 'teams' ? '搜索团队' : '搜索成员名称、账号或 ID'" class="team-search" />
+          <ElInput v-model="keyword" clearable :placeholder="currentView === 'teams' ? '搜索团队' : '搜索成员名称'" class="team-search" />
           <template v-if="currentView === 'human'">
             <ElSelect v-model="humanFilters.teamId" clearable placeholder="团队"><ElOption v-for="team in store.teams" :key="team.id" :label="team.name" :value="team.id" /></ElSelect>
             <ElSelect v-model="humanFilters.role" clearable placeholder="角色"><ElOption v-if="access.isOwner" label="Owner" value="Owner" /><ElOption v-for="role in filterRoles" :key="role.id" :label="role.name" :value="role.id" /></ElSelect>
