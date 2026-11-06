@@ -16,6 +16,7 @@ import {
   channelMeta, channelTypes, countVisibleCharacters, createChannelDraft, domainsEquivalent, foregroundForTheme, formatDate, languages, parseDomain, truncateVisibleCharacters,
 } from '#/features/channels/channel-data';
 import { useChannelStore } from '#/features/channels/channel-store';
+import { useDemoServiceStore } from '#/features/service/demo-store';
 import { formatChatTime } from '#/utils/chat-time';
 
 import { CHANNEL_DEMO_SEEDED_KEY, channelDemoChannels, channelDemoIds } from './channel-demo-data';
@@ -30,6 +31,7 @@ type DemoRole = 'admin' | 'editor' | 'none' | 'operator' | 'viewer';
 interface PreviewMessage { content: string; fileUrl?: string; id: string; kind?: 'file' | 'image' | 'text' | 'video'; role: 'agent' | 'customer'; time: string }
 
 const store = useChannelStore();
+const service = useDemoServiceStore();
 const route = useRoute();
 const activeType = ref<Filter>('all');
 const query = ref('');
@@ -207,7 +209,14 @@ async function requestDelete(channel: Channel) {
   if (channel.enabled) { ElMessage.warning('请先停用渠道，再执行删除'); return; }
   deleteTarget.value = channel; deleteName.value = '';
 }
-function confirmDelete() { if (!deleteTarget.value || deleteName.value !== deleteTarget.value.name) return; store.remove(deleteTarget.value.id); deleteTarget.value = undefined; ElMessage.success('渠道已删除，历史会话数据已保留'); }
+function confirmDelete() {
+  if (!deleteTarget.value || deleteName.value !== deleteTarget.value.name) return;
+  const target = deleteTarget.value;
+  const endedCount = service.endSessionsByChannel(target.id, '渠道已删除');
+  store.remove(target.id);
+  deleteTarget.value = undefined;
+  ElMessage.success(endedCount ? `渠道已删除，${endedCount} 个未结束会话已结束归档` : '渠道已删除，历史会话数据已保留');
+}
 async function toggle(channel: Channel, enabled: boolean) {
   if (!permissions.value.toggle) { ElMessage.warning('当前角色无启停渠道权限'); return; }
   if (!enabled) {
@@ -338,13 +347,6 @@ function clearImage(field: 'brandAvatar' | 'widgetCustomIcon') {
   if (field === 'widgetCustomIcon') detail.value.widgetIcon = 'message';
 }
 function openInstall(channel: Channel) { openDetail(channel); nextTick(() => { installVisible.value = true; }); }
-function acknowledgeInstall() {
-  const channel = detail.value;
-  if (!channel || channel.type !== 'web-widget') return;
-  store.acknowledgeInstall(channel.id);
-  channel.installStatus = 'success'; channel.installCheckedAt = new Date().toISOString();
-  ElMessage.success('已收到模拟网站安装回执');
-}
 function onBeforeUnload(event: BeforeUnloadEvent) {
   if (!hasUnsavedChanges.value && !(formVisible.value && formDirty.value)) return;
   event.preventDefault(); event.returnValue = '';
@@ -384,6 +386,7 @@ watch(pageSize, () => { page.value = 1; });
               <button :class="{ active: detailSection === 'display' }" @click="detailSection = 'display'">{{ detail.type === 'web-widget' ? '可见性与位置' : detail.type === 'chat-page' ? '聊天链接' : '连接信息' }}<i v-if="sectionDirty('display')"></i></button>
             </nav>
             <section class="modern-channel-config">
+              <div class="modern-config-scroll">
               <section class="modern-config-section">
                 <h2>{{ detailSection === 'basic' ? '基本设置' : detailSection === 'appearance' ? '品牌外观' : detail.type === 'web-widget' ? '可见性与位置' : detail.type === 'chat-page' ? '聊天链接' : '连接信息' }}</h2>
               <ElForm v-if="detailSection === 'basic'" label-position="top">
@@ -408,8 +411,9 @@ watch(pageSize, () => { page.value = 1; });
                 </div>
               </template>
               <div v-else-if="detail.type === 'chat-page'" class="link-card"><label>聊天页面 URL</label><div><ElInput :model-value="clientUrl" readonly /><ElButton @click="copy(clientUrl, '聊天页面链接')">复制</ElButton></div><ElButton @click="openClient">打开聊天页面</ElButton></div>
-                <div v-else class="telegram-info"><strong>Telegram Bot</strong><p>通过 Bot Token 接收 Telegram 客户消息。Token 更新后保存即可重新连接。</p><span class="connected-dot">已连接</span></div>
+                <div v-else class="telegram-info"><strong>Telegram Bot</strong><p>通过 Bot Token 接收 Telegram 客户消息。Token 更新后保存即可重新连接。</p></div>
               </section>
+              </div>
               <footer v-if="permissions.edit" class="config-actions"><ElButton class="ui-btn-outline" :disabled="!dirty" @click="cancelSection">取消</ElButton><ElButton type="primary" :disabled="!dirty" @click="saveDetail">保存</ElButton></footer>
             </section>
             <aside class="modern-channel-preview">
@@ -464,9 +468,9 @@ watch(pageSize, () => { page.value = 1; });
     </ElForm><template #footer><ElButton class="ui-btn-outline" @click="closeForm">取消</ElButton><ElButton type="primary" :loading="formSubmitting" :disabled="!formDirty" @click="submitForm">{{ editingId ? '保存' : channelMeta[draft.type].addLabel }}</ElButton></template>
 </ElDialog>
 
-    <ElDialog v-model="installVisible" class="install-code-modal" title="安装网站小部件" width="860px"><p>将以下代码粘贴到页面 <code>&lt;/body&gt;</code> 标签之前。</p><pre><code>{{ detail?.installCode || draft.installCode }}</code></pre><div class="install-code-modal-actions"><ElButton v-if="detail?.type === 'web-widget' && detail.installStatus !== 'success'" class="ui-btn-outline" @click="acknowledgeInstall">模拟安装回执</ElButton><ElButton class="install-code-copy-button" type="primary" @click="copy(detail?.installCode || draft.installCode || '', '安装代码')"><QIcon name="copy" :size="16" />复制代码</ElButton></div></ElDialog>
+    <ElDialog v-model="installVisible" class="install-code-modal" title="安装网站小部件" width="860px"><p>将以下代码粘贴到页面 <code>&lt;/body&gt;</code> 标签之前。</p><pre><code>{{ detail?.installCode || draft.installCode }}</code></pre><div class="install-code-modal-actions"><ElButton class="install-code-copy-button" type="primary" @click="copy(detail?.installCode || draft.installCode || '', '安装代码')"><QIcon name="copy" :size="16" />复制代码</ElButton></div></ElDialog>
     <ElDialog v-model="shareVisible" class="chat-page-setup-modal" title="与客户分享您的聊天页面" width="720px"><p class="dialog-copy">在新闻简报、网站和社交媒体上分享聊天链接，以便客户随时与你聊天。</p><div class="share-row"><ElInput :model-value="`${origin}/chat/${draft.teamId}`" readonly /><ElButton class="ui-btn-outline" @click="copy(`${origin}/chat/${draft.teamId}`, '聊天页面链接')">复制链接</ElButton><ElButton type="primary" @click="openSharedClient">打开聊天页面</ElButton></div></ElDialog>
-    <ElDialog :model-value="Boolean(deleteTarget)" class="channel-delete-dialog" title="删除渠道？" width="480px" @update:model-value="(value) => { if (!value) deleteTarget = undefined }"><p class="dialog-copy">删除后该渠道的入站消息将立即停止，历史会话保留但不可继续接收。请输入渠道名称以确认。</p><label class="delete-label">渠道名称<ElInput v-model="deleteName" :placeholder="deleteTarget?.name" /></label><template #footer><ElButton class="ui-btn-outline" @click="deleteTarget = undefined">取消</ElButton><ElButton type="danger" :disabled="deleteName !== deleteTarget?.name" @click="confirmDelete">确认删除</ElButton></template></ElDialog>
+    <ElDialog :model-value="Boolean(deleteTarget)" class="channel-delete-dialog" title="删除渠道？" width="480px" @update:model-value="(value) => { if (!value) deleteTarget = undefined }"><p class="dialog-copy">删除后该渠道的入站消息将立即停止，其下所有未结束会话将自动结束并归档；历史会话仍保留删除前的渠道名称。请输入渠道名称以确认。</p><label class="delete-label">渠道名称<ElInput v-model="deleteName" :placeholder="deleteTarget?.name" /></label><template #footer><ElButton class="ui-btn-outline" @click="deleteTarget = undefined">取消</ElButton><ElButton type="danger" :disabled="deleteName !== deleteTarget?.name" @click="confirmDelete">确认删除</ElButton></template></ElDialog>
   </section>
 </template>
 

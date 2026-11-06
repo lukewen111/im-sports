@@ -55,10 +55,6 @@ export const useChannelStore = defineStore('im-support-channels', () => {
     if (channels.value.some((item) => item.type === 'telegram' && item.id !== exceptId && (item.telegramBotId || item.botToken?.split(':')[0]) === botId)) return { error: '该TG Bot已被其他渠道绑定' };
     return { botId };
   };
-  const acknowledgeInstall = (id: string) => {
-    const channel = channels.value.find((item) => item.id === id);
-    if (channel?.type === 'web-widget') { channel.installStatus = 'success'; channel.installCheckedAt = new Date().toISOString(); }
-  };
   const deleteTeamBindings = (teamId: string) => {
     const affected = channels.value.filter((item) => item.teamId === teamId);
     const chatPageIds = new Set(affected.filter((item) => item.type === 'chat-page').map((item) => item.id));
@@ -93,5 +89,5 @@ export const useChannelStore = defineStore('im-support-channels', () => {
     localStorage.setItem(TEAM_MIGRATIONS_KEY, JSON.stringify([...audit, ...history]));
     return { endedChatPages: chatPageIds.size, migratedChannels: migratedChannelIds.size, updatedConversations: audit.length };
   };
-  return { acknowledgeInstall, channels, deleteTeamBindings, deletedChannelSnapshots, findTeam, hasChatPage, remove, resolveTeam, save, toggle, validTeams, verifyTelegram };
+  return { channels, deleteTeamBindings, deletedChannelSnapshots, findTeam, hasChatPage, remove, resolveTeam, save, toggle, validTeams, verifyTelegram };
 });

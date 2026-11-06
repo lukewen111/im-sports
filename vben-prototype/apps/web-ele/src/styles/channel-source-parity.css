@@ -203,6 +203,11 @@
   white-space: nowrap;
 }
 
+/* 渠道卡片「已连接 N」：软标签底再深一档，与 #F5F5F5 卡片底区分但不抢过标题；不加描边、不改几何。 */
+.channels-page .channel-type-card .ui-tag.is-soft.is-success {
+  background: #ddf1e5;
+}
+
 .channels-page .channel-type-card p {
   min-height: 44px;
   margin: 14px 0 0;
@@ -541,9 +546,17 @@
   min-width: 0;
   flex-direction: column;
   padding: 0;
-  overflow: auto;
+  overflow: hidden;
   background: var(--ui-surface);
   border-right: 1px solid var(--ui-line);
+}
+
+/* 配置内容独立滚动，操作栏位于滚动区之外，任何 tab 滚到底都不会与「边缘距离」等末行重叠。 */
+.channels-page .modern-config-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .channels-page .modern-config-section {
@@ -977,15 +990,14 @@
 .channels-page .offset-row label { display: grid; gap: 6px; color: var(--ui-ink-secondary); font-size: 13px; }
 
 .channels-page .config-actions {
-  position: sticky;
-  bottom: 0;
+  position: static;
   display: flex;
   height: auto;
   min-height: 64px;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: auto;
+  margin-top: 0;
   padding: 14px 24px;
   background: var(--ui-surface);
   border-top: 1px solid var(--ui-line);
@@ -996,7 +1008,6 @@
 .channels-page .telegram-info { padding: 20px; background: var(--ui-canvas); border-radius: var(--ui-radius-card); }
 .channels-page .telegram-info strong { font-size: 15px; font-weight: 600; }
 .channels-page .telegram-info p { color: var(--ui-ink-secondary); font-size: 13px; }
-.channels-page .connected-dot { color: var(--ui-success); }
 
 .channels-page .modern-channel-preview {
   display: flex;
