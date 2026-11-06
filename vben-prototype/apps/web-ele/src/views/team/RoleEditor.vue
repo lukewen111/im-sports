@@ -5,7 +5,7 @@ import { useRouter, onBeforeRouteLeave } from 'vue-router';
 import { ElButton, ElCheckbox, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElTooltip } from 'element-plus';
 import QIcon from '#/components/q-icon/QIcon.vue';
 import { usePrototypeAccess } from '#/features/team/access-store';
-import { changePermission, emptyPermissions, permissionLabels, roleRecords, scopeRank } from '#/features/team/role-catalog';
+import { changePermission, emptyPermissions, legalizePermissions, permissionLabels, roleRecords, scopeRank } from '#/features/team/role-catalog';
 import { useRoleStore } from '#/features/team/role-store';
 
 interface RoleDraft extends Omit<RoleRecord, 'kind'> {
@@ -78,6 +78,13 @@ const matrix: PermGroup[] = [
 const readonly = computed(() => Boolean(props.readonly || draft.value?.system));
 const pageTitle = computed(() => (readonly.value ? '角色详情' : draft.value?.version ? '编辑角色' : '角色创建'));
 const dirty = computed(() => Boolean(draft.value) && JSON.stringify(draft.value) !== baseline.value);
+const isMemberKind = computed(() => draft.value?.kind === 'member');
+
+// 角色类型即权限上限：普通成员不可持有团队三项、渠道管理、聊天与接待
+const ADMIN_ONLY_KEYS: PermKey[] = ['teams', 'humans', 'ai', 'channels', 'settings'];
+function blockedByKind(item: PermItem) {
+  return isMemberKind.value && ADMIN_ONLY_KEYS.includes(item.key);
+}
 
 function resetErrors() {
   Object.assign(errors, { name: '', kind: '', pages: '', permission: '' });
@@ -94,6 +101,7 @@ function load() {
       return;
     }
     draft.value = structuredClone(toRaw(role)) as RoleDraft;
+    draft.value.permissions = legalizePermissions(draft.value.permissions, role.kind);
   } else {
     draft.value = {
       id: `role-${crypto.randomUUID()}`,
@@ -112,6 +120,13 @@ function load() {
 
 watch(() => props.roleId, load, { immediate: true });
 
+// 切换为普通成员时，同步清掉管理员专属权限，避免保存出非法组合
+watch(() => draft.value?.kind, (kind) => {
+  const p = draft.value?.permissions;
+  if (!p || kind !== 'member' || readonly.value) return;
+  Object.assign(p, legalizePermissions(p, 'member'));
+});
+
 watch(roleRecords, (list) => {
   const d = draft.value;
   if (!d?.version) return;
@@ -129,7 +144,7 @@ function checked(item: PermItem) {
 }
 
 function itemDisabled(item: PermItem) {
-  if (readonly.value) return true;
+  if (readonly.value || blockedByKind(item)) return true;
   const c = access.permissions;
   if (item.key === 'assigned' || item.key === 'customers') return c[item.key] === 'none';
   if (item.key === 'takeover') return !c.takeover || c.assigned === 'none';
@@ -152,7 +167,7 @@ function moduleDisabled(group: PermGroup) {
 
 function toggleItem(item: PermItem, value: boolean | number | string) {
   const p = draft.value?.permissions;
-  if (!p || readonly.value) return;
+  if (!p || readonly.value || blockedByKind(item)) return;
   const on = Boolean(value);
   if (item.key === 'assigned' || item.key === 'customers') changePermission(p, item.key, on ? (p[item.key] === 'none' ? 'self' : p[item.key]) : 'none');
   else changePermission(p, item.key, on);
@@ -229,6 +244,8 @@ function validate() {
   const hasPage = p.assigned !== 'none' || p.pending || p.customers !== 'none' || p.teams || p.humans || p.ai || p.channels || p.settings;
   if (!hasPage) errors.pages = '请至少配置一项业务页面权限';
   if ((p.takeover && p.assigned === 'none') || (p.recall && (p.assigned === 'none' || p.customers === 'none'))) errors.permission = '权限依赖不完整，请重新配置';
+
+  if (d.kind === 'member' && (p.teams || p.humans || p.ai || p.channels || p.settings)) errors.permission = '普通成员类型不可授予团队、渠道管理、聊天与接待权限';
 
   if (!errors.permission) {
     const c = access.permissions;
@@ -384,6 +401,7 @@ onBeforeRouteLeave(async () => {
 
         <p v-if="errors.pages" class="ui-form-error">{{ errors.pages }}</p>
         <p v-if="errors.permission" class="ui-form-error">{{ errors.permission }}</p>
+        <p v-if="!readonly && isMemberKind" class="ui-form-help">普通成员类型仅可配置聊天与客户权限；团队管理、人类成员、AI 成员、渠道管理、聊天与接待由管理员类型角色持有，无法勾选。</p>
         <p v-if="!readonly && !access.isOwner" class="ui-form-help">灰显权限表示超出您当前可转授的范围，无法勾选。</p>
 
         <div v-if="conflict" class="conflict-notice" role="alert">

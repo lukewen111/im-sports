@@ -27,6 +27,8 @@ export interface RoleRecord {
   version: number;
   permissions: RolePermissions;
 }
+// 仅管理员类型角色可持有的权限：团队三项、渠道管理、聊天与接待
+export const ADMIN_ONLY_PERMISSIONS = ['teams', 'humans', 'ai', 'channels', 'settings'] as const;
 export const emptyPermissions = (): RolePermissions => ({
   assigned: 'none', pending: false, takeover: false, transfer: false, end: false,
   customers: 'none', recall: false, teams: false, humans: false, ai: false,
@@ -39,13 +41,19 @@ export const fullPermissions = (): RolePermissions => ({
 });
 const defaults: RoleRecord[] = [
   { id: 'role-supervisor', name: '主管', kind: 'admin', description: '管理全部业务数据及普通成员角色。', system: true, createdAt: '', version: 1, permissions: fullPermissions() },
-  { id: 'role-service', name: '客服', kind: 'member', description: '处理本人会话与客户，查看所属团队成员。', system: true, createdAt: '', version: 1, permissions: { ...fullPermissions(), assigned: 'self', customers: 'self', teamScope: 'team', channels: false, settings: false } },
+  { id: 'role-service', name: '客服', kind: 'member', description: '处理本人会话与客户，不具备团队与设置管理权限。', system: true, createdAt: '', version: 1, permissions: { ...fullPermissions(), assigned: 'self', customers: 'self', teamScope: 'team', teams: false, humans: false, ai: false, channels: false, settings: false } },
 ];
 const KEY = 'im-support-vben:roles-v1';
+// 普通成员类型不可持有管理员专属权限，存量数据在读取时一并收敛
+export function legalizePermissions(p: RolePermissions, kind: RoleKind): RolePermissions {
+  const value = { ...p };
+  if (kind === 'member') for (const key of ADMIN_ONLY_PERMISSIONS) value[key] = false;
+  return value;
+}
 function loadRoles(): RoleRecord[] {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || '[]') as RoleRecord[];
-    return [...structuredClone(defaults), ...saved.filter((role) => !role.system && !defaults.some((item) => item.id === role.id))];
+    return [...structuredClone(defaults), ...saved.filter((role) => !role.system && !defaults.some((item) => item.id === role.id)).map((role) => ({ ...role, permissions: legalizePermissions(role.permissions, role.kind) }))];
   } catch { return structuredClone(defaults); }
 }
 // 共享目录独立于成员 Store，避免成员校验与角色成员数之间的循环依赖。
