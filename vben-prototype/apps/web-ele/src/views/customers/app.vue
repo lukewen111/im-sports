@@ -544,7 +544,7 @@ function rowClassName({ row }: { row: DemoCustomer }) {
 .search-input :deep(.el-input__prefix-inner > :last-child) { margin-right: 6px; }
 .search-icon { width: 14px; height: 14px; fill: none; stroke: currentcolor; stroke-width: 1.3; }
 
-.table-area { flex: 1; min-height: 0; min-width: 0; padding: 0 4px; }
+.table-area { flex: 1; min-height: 0; min-width: 0; }
 
 .list-card :deep(.el-table) {
   --el-table-border-color: var(--line);
@@ -571,28 +571,13 @@ function rowClassName({ row }: { row: DemoCustomer }) {
   border-bottom: 1px solid #f2f2f3;
 }
 .list-card :deep(.el-table__row) { cursor: pointer; }
-.list-card :deep(.el-table .cell) { position: relative; z-index: 0; padding: 0 12px; }
-/* 行 hover 用内缩圆角底色（左右 inset 6px），文字与头像不位移 */
-.list-card :deep(.el-table__body .cell::before) {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: -6px;
-  left: -6px;
-  height: 48px;
-  z-index: -1;
-  background: transparent;
-  border-radius: 8px;
-  transform: translateY(-50%);
-  transition: background-color 0.15s ease;
-}
-.list-card :deep(.el-table__row:hover .cell::before) { background: #f5f5f6; }
-.list-card :deep(.el-table__body td:first-child .cell::before) { left: 6px; }
-.list-card :deep(.el-table__body td:last-child .cell::before) { right: 6px; }
+.list-card :deep(.el-table .cell) { padding: 0 12px; }
+/* 行 hover 铺在单元格上：相邻单元格无缝相接成一整块，仅首末格带 8px 圆角 */
+.list-card :deep(.el-table__body tr.el-table__row:hover > td.el-table__cell) { background-color: #f5f5f6; }
+.list-card :deep(.el-table__body tr.el-table__row:hover > td.el-table__cell:first-child) { border-radius: 8px 0 0 8px; }
+.list-card :deep(.el-table__body tr.el-table__row:hover > td.el-table__cell:last-child) { border-radius: 0 8px 8px 0; }
 .cell-text { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cell-text.is-empty { color: var(--ink-3); }
-/* 操作列固定右侧：三档表格均无横向滚动，底色透明以承接整行 hover 圆角 */
-.list-card :deep(.el-table-fixed-column--right) { background: transparent !important; }
 
 .customer-cell { display: flex; gap: 10px; align-items: center; min-width: 0; }
 .customer-text { display: block; min-width: 0; }
