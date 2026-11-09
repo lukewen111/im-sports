@@ -32,6 +32,7 @@ watchEffect(() => {
 });
 
 const navItems = [
+  { icon: 'message-circle-dots', label: '自动消息设置', path: '/settings/reception/auto-message' },
   { icon: 'settings', label: '会话设置', path: '/settings/reception/session' },
   { icon: 'bell', label: '消息通知', path: '/settings/reception/notification' },
   { icon: 'message-circle-text', label: '聊天工具', path: '/settings/reception/tools' },

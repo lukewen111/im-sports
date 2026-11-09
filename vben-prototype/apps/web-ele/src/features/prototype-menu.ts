@@ -10,6 +10,6 @@ export function buildPrototypeMenus(access: ReturnType<typeof usePrototypeAccess
     ...(p.customers !== 'none' ? [{ icon: qicon('user'), name: '客户', path: '/customers' }] : []),
     ...(access.teamEntry ? [{ icon: qicon('team'), name: '团队', path: access.teamEntry }] : []),
     ...(p.channels ? [{ icon: qicon('channel'), name: '渠道', path: '/channels' }] : []),
-    ...(p.settings ? [{ icon: qicon('settings'), name: '设置', path: '/settings/reception/session' }] : []),
+    ...(p.settings ? [{ icon: qicon('settings'), name: '设置', path: '/settings/reception/auto-message' }] : []),
   ];
 }

@@ -124,9 +124,15 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'Settings',
         path: 'settings',
-        redirect: '/settings/reception/session',
+        redirect: '/settings/reception/auto-message',
         meta: { icon: qicon('settings'), title: '设置' },
         children: [
+          {
+            name: 'AutoMessageSettings',
+            path: 'reception/auto-message',
+            component: () => import('#/views/settings/auto-message/app.vue'),
+            meta: { icon: qicon('message-circle-dots'), title: '自动消息设置' },
+          },
           {
             name: 'SessionSettings',
             path: 'reception/session',
@@ -150,7 +156,7 @@ const coreRoutes: RouteRecordRaw[] = [
       {
         name: 'Reception',
         path: 'reception',
-        redirect: '/settings/reception/session',
+        redirect: '/settings/reception/auto-message',
         meta: { hideInMenu: true, hideInTab: true, title: '聊天与接待' },
       },
       { name: 'Personal', path: 'personal', component: () => import('#/views/personal/app.vue'), meta: { hideInMenu: true, icon: qicon('user'), title: '个人中心' } },

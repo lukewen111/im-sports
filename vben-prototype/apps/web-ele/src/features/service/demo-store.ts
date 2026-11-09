@@ -110,6 +110,16 @@ export interface DemoSession {
   unread: number;
 }
 
+export type AutoMessageKey = 'assign' | 'close' | 'closing' | 'timeout' | 'welcome';
+
+export interface AutoMessageLine {
+  content: string;
+  id: string;
+  language: string;
+}
+
+export type AutoMessageSettings = Record<AutoMessageKey, AutoMessageLine[]>;
+
 export interface ReceptionSettings {
   // 租户级会话时限
   firstResponseMinutes: number;
@@ -179,6 +189,14 @@ export interface NotificationState extends MemberNotificationSettings {
 const KEY = 'im-support-vben:service-demo-v9';
 const LEGACY_KEYS = ['im-support-vben:service-demo-v8', 'im-support-vben:service-demo-v7', 'im-support-vben:service-demo-v6', 'im-support-vben:service-demo-v5', 'im-support-vben:service-demo-v4', 'im-support-vben:service-demo-v3', 'im-support-vben:service-demo-v2', 'im-support-vben:service-demo-v1'];
 const LANGUAGES = ['简体中文', '繁体中文', '英语', '越南语', '泰语', '高棉语', '缅甸语', '老挝语', '西班牙语'];
+const seedAutoMessages = (): AutoMessageSettings => ({
+  assign: [{ content: 'Your session has been assigned to a customer service representative who will assist you shortly.', id: 'auto-assign-1', language: '英语' }],
+  close: [{ content: 'Your session has been closed. Thank you for contacting us!', id: 'auto-close-1', language: '英语' }],
+  closing: [{ content: "Thank you for your inquiry. We hope we've been helpful. Have a great day!", id: 'auto-closing-1', language: '英语' }],
+  timeout: [{ content: 'Your session has been automatically closed due to inactivity. If you need further assistance, please start a new session.', id: 'auto-timeout-1', language: '英语' }],
+  welcome: [{ content: 'Hello, I am your dedicated customer service representative. How can I assist you today?', id: 'auto-welcome-1', language: '英语' }],
+});
+
 const nowIso = () => new Date().toISOString();
 const clone = <T>(value: T): T => structuredClone(value);
 let eventSeed = 0;
@@ -197,6 +215,7 @@ const normalizeLanguage = (value?: string) => {
 };
 
 interface PersistedState {
+  autoMessages: AutoMessageSettings;
   customers: DemoCustomer[];
   memberNotifications: Record<string, MemberNotificationSettings>;
   memberTranslations: Record<string, MemberTranslationSettings>;
@@ -244,14 +263,15 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
     browserNotification: false, firstResponseMinutes: 2, inactiveCloseMinutes: 10, receiveTranslation: false,
     sendTranslation: false, sound: true, titleBlink: true, visitorLanguage: '英语', workLanguage: '简体中文',
   });
+  const autoMessages = ref<AutoMessageSettings>({ ...seedAutoMessages(), ...saved.autoMessages });
   const personal = ref<Record<string, PersonalSettings>>(saved.personal || {});
   const memberNotifications = ref<Record<string, MemberNotificationSettings>>(saved.memberNotifications || {});
   const memberTranslations = ref<Record<string, MemberTranslationSettings>>(saved.memberTranslations || {});
   const runtimeNotifications = ref<Record<string, NotificationTrigger>>(saved.runtimeNotifications || {});
 
-  watch([customers, sessions, reception, personal, memberNotifications, memberTranslations, runtimeNotifications], () => {
+  watch([customers, sessions, reception, personal, memberNotifications, memberTranslations, runtimeNotifications, autoMessages], () => {
     localStorage.setItem(KEY, JSON.stringify({
-      customers: customers.value, sessions: sessions.value, reception: reception.value, personal: personal.value,
+      autoMessages: autoMessages.value, customers: customers.value, sessions: sessions.value, reception: reception.value, personal: personal.value,
       memberNotifications: memberNotifications.value, memberTranslations: memberTranslations.value, runtimeNotifications: runtimeNotifications.value,
     }));
   }, { deep: true });
@@ -476,6 +496,10 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
     return undefined;
   }
 
+  function setAutoMessages(next: AutoMessageSettings) {
+    autoMessages.value = JSON.parse(JSON.stringify(next)) as AutoMessageSettings;
+  }
+
   function setMemberNotification(memberId: string, patch: Partial<MemberNotificationSettings>) {
     memberNotifications.value[memberId] = { ...memberNotificationFor(memberId), ...patch };
   }
@@ -639,10 +663,10 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
   }
 
   return {
-    assign, autoAssign, consumeNotification, customerById, customerSessions, customers, end, endSessionsByChannel, ingestCustomerMessage, isSystemEvent,
+    assign, autoAssign, autoMessages, consumeNotification, customerById, customerSessions, customers, end, endSessionsByChannel, ingestCustomerMessage, isSystemEvent,
     lastMessage, markRead, memberNotificationFor, memberNotifications, memberTranslationFor, memberTranslations, messageText,
     notificationState, personal, previewTranslation, reception, recall, recentSessions, send, sessionById, sessionChannel,
-    sessionChannelType, sessionInfo, sessions, setMemberNotification, setMemberTranslation, setPending, settingsFor, takeover, takeoverCheck,
+    sessionChannelType, sessionInfo, sessions, setAutoMessages, setMemberNotification, setMemberTranslation, setPending, settingsFor, takeover, takeoverCheck,
     translateMessage, triggerNotification, updateCustomer, savePersonal, visitSummary,
   };
 });

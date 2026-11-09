@@ -15,7 +15,7 @@ export const usePrototypeAccess = defineStore('prototype-access', () => {
   const visibleTeams = computed(() => team.teams.filter((item) => permissions.value.teamScope === 'all' || current.value?.teamIds.includes(item.id)));
   const visibleMembers = computed(() => team.members.filter((member) => (member.kind === 'ai' ? permissions.value.ai : permissions.value.humans) && (permissions.value.teamScope === 'all' || member.teamIds.some((id) => current.value?.teamIds.includes(id)))));
   const teamEntry = computed(() => permissions.value.humans || permissions.value.ai ? '/team/members/all' : permissions.value.teams ? '/team/teams' : canManageRoles.value ? '/team/roles' : '');
-  const home = computed(() => permissions.value.assigned !== 'none' || permissions.value.pending ? '/inbox' : permissions.value.customers !== 'none' ? '/customers' : teamEntry.value || (permissions.value.channels ? '/channels' : permissions.value.settings ? '/settings/reception/session' : '/personal'));
+  const home = computed(() => permissions.value.assigned !== 'none' || permissions.value.pending ? '/inbox' : permissions.value.customers !== 'none' ? '/customers' : teamEntry.value || (permissions.value.channels ? '/channels' : permissions.value.settings ? '/settings/reception/auto-message' : '/personal'));
   function canManageMember(member?: TeamMember, kind: 'ai' | 'human' = 'human') {
     const feature = (member?.kind || kind) === 'ai' ? permissions.value.ai : permissions.value.humans;
     return Boolean(isAdmin.value && feature && (!member || (!member.protected || isOwner.value) && (permissions.value.teamScope === 'all' || member.teamIds.every((id) => current.value?.teamIds.includes(id)))));
