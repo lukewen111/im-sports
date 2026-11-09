@@ -3,8 +3,8 @@ import type { DemoAttachment, DemoMessage, DemoSession, DemoTranslation, SystemE
 
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { ElButton, ElDatePicker, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElMessage, ElMessageBox, ElOption, ElPopover, ElSelect, ElTooltip } from 'element-plus';
-import { QiArchive, QiAttachment, QiClock, QiCrossCircleCenter, QiEmojiSmile, QiInbox, QiMore, QiRobot, QiSendRight, QiTransfer, QiTranslate, QiUser, QiUser3 } from 'qingicon-vue';
+import { ElButton, ElDatePicker, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElMessage, ElMessageBox, ElOption, ElPopover, ElSelect, ElTable, ElTableColumn, ElTooltip } from 'element-plus';
+import { QiArchive, QiAttachment, QiBookOpen, QiClock, QiCrossCircleCenter, QiEmojiSmile, QiInbox, QiMore, QiRobot, QiSearch, QiSendRight, QiTransfer, QiTranslate, QiUser, QiUser3 } from 'qingicon-vue';
 
 import type { ChannelType } from '#/features/channels/channel-data';
 
@@ -20,6 +20,16 @@ import CustomerDetail from '#/features/customer-detail/CustomerDetail.vue';
 import { formatChatTime } from '#/utils/chat-time';
 
 type GroupKey = 'ai' | 'all' | 'colleagues' | 'ended' | 'mine' | 'pending';
+
+/* 会话列表标题跟随左侧分组名 */
+const GROUP_TITLES: Record<GroupKey, string> = {
+  ai: 'AI 成员',
+  all: '全部',
+  colleagues: '同事',
+  ended: '已结束',
+  mine: '我的',
+  pending: '待分配',
+};
 
 const LANGUAGES = ['简体中文', '繁体中文', '英语', '越南语', '泰语', '高棉语', '缅甸语', '老挝语', '西班牙语'];
 // 翻译预览条左端语种胶囊的简称
@@ -52,6 +62,89 @@ const previewMedia = ref<null | { kind: 'image' | 'video'; name?: string; url: s
 const previewScale = ref(1);
 
 const EMOJIS = ['😀', '😄', '😊', '🙂', '😉', '😍', '🤝', '👍', '🙏', '🎉', '🔥', '✅', '❤️', '💡', '📦', '🚚', '⏰', '🤔'];
+
+/* ---------------- 话术库（原型只演示界面，数据写死、不接 store） ---------------- */
+interface CannedItem {
+  content: string;
+  id: string;
+  note: string;
+}
+interface CannedGroup {
+  items: CannedItem[];
+  name: string;
+}
+
+const CANNED_GROUPS: CannedGroup[] = [
+  {
+    name: '通用',
+    items: [
+      { id: 'canned-general-1', content: '您好，很高兴为您服务，请问有什么可以帮您？', note: '开场问候' },
+      { id: 'canned-general-2', content: '感谢您的耐心等待，我这边正在为您核实，请稍等片刻。', note: '等待安抚' },
+      { id: 'canned-general-3', content: 'Hello, thanks for reaching out. Could you share a screenshot so I can check it for you?', note: '请求截图' },
+      { id: 'canned-general-4', content: '请问还有其他可以帮到您的吗？', note: '结束确认' },
+    ],
+  },
+  {
+    name: '售前咨询',
+    items: [
+      { id: 'canned-presale-1', content: '您好，这款套餐包含全部基础功能，首月还有 8 折优惠，需要我帮您开通体验吗？', note: '套餐介绍' },
+      { id: 'canned-presale-2', content: '支持 7 天无理由退款，您可以放心下单。', note: '退款政策' },
+      { id: 'canned-presale-3', content: 'Our annual plan saves you 20% compared with monthly billing. Would you like me to send you the pricing details?', note: '年付优惠' },
+      { id: 'canned-presale-4', content: '很抱歉，目前该商品暂时缺货，预计 3 天内补货。', note: '缺货说明' },
+    ],
+  },
+  {
+    name: '售后跟进',
+    items: [
+      { id: 'canned-aftersale-1', content: '您的订单已经提交退款申请，预计 1-3 个工作日原路退回，请留意查收。', note: '退款进度' },
+      { id: 'canned-aftersale-2', content: '麻烦您提供一下订单号和问题截图，我这边立即为您处理。', note: '收集信息' },
+      { id: 'canned-aftersale-3', content: 'We have escalated your case to our technical team. You will receive an update within 24 hours.', note: '升级技术' },
+    ],
+  },
+  { name: '活动通知', items: [] },
+];
+
+const cannedOpen = ref(false);
+const cannedGroup = ref(CANNED_GROUPS[0]?.name || '');
+const cannedKeyword = ref('');
+const composerInput = ref<HTMLTextAreaElement>();
+
+const cannedItems = computed(() => {
+  const group = CANNED_GROUPS.find((item) => item.name === cannedGroup.value) || CANNED_GROUPS[0];
+  const items = group?.items || [];
+  const keyword = cannedKeyword.value.trim().toLowerCase();
+  if (!keyword) return items;
+  return items.filter((item) => item.content.toLowerCase().includes(keyword) || item.note.toLowerCase().includes(keyword));
+});
+
+function openCanned() {
+  cannedKeyword.value = '';
+  cannedOpen.value = true;
+}
+
+/* 点击话术追加到输入框现有文字末尾（原样拼接，不加空格或标点），不发送；
+   输入框为空时等同于直接填入；弹窗关闭后光标落在整个文本末尾 */
+function useCanned(item: CannedItem) {
+  input.value = `${input.value}${item.content}`;
+  cannedOpen.value = false;
+}
+
+/* 表格整行可点；「编辑」「删除」两个操作不触发填入 */
+function onCannedRowClick(row: CannedItem, _column: unknown, event: Event) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('.canned-row-action')) return;
+  useCanned(row);
+}
+
+function focusComposerInput() {
+  nextTick(() => {
+    const element = composerInput.value;
+    if (!element) return;
+    element.focus();
+    const end = element.value.length;
+    element.setSelectionRange(end, end);
+  });
+}
 
 if (access.permissions.assigned === 'none' && access.permissions.pending) group.value = 'pending';
 const requestedSession = String(route.query.session || '');
@@ -102,8 +195,27 @@ function identityOfMessage(message: DemoMessage) {
 function waitLabel(session: DemoSession) {
   const from = +new Date(session.queueEnteredAt || session.createdAt);
   const seconds = Math.max(0, Math.floor((now.value - from) / 1000));
-  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m`;
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  /* 满 60 分钟只显示小时，向下取整且不带分钟 */
+  return `${Math.floor(minutes / 60)}h`;
 }
+/* Mock 演示：每次进入聊天页重置待分配会话的入队时间，
+   让等待时长同时呈现秒 / 分钟 / 小时三档，秒档每秒可见跳动 */
+function resetPendingQueueClock() {
+  const pending = store.sessions
+    .filter((session) => session.status === 'pending')
+    .sort((left, right) => +new Date(left.queueEnteredAt || left.createdAt) - +new Date(right.queueEnteredAt || right.createdAt));
+  /* 从等得最久到刚入队：小时档 → 分钟档 → 秒档；多余会话继续按分钟档向下递进 */
+  const offsets = [3 * 3600 + 12 * 60, 2 * 3600 + 5 * 60, 47 * 60 + 20, 8 * 60 + 5, 6];
+  const base = Date.now();
+  pending.forEach((session, index) => {
+    const seconds = offsets[index] ?? Math.max(6, 8 * 60 - (index - offsets.length) * 37);
+    session.queueEnteredAt = new Date(base - seconds * 1000).toISOString();
+  });
+}
+resetPendingQueueClock();
 
 /* ---------------- 分组与列表 ---------------- */
 function groupFor(session: DemoSession): GroupKey {
@@ -257,7 +369,9 @@ const groupCounts = computed(() => {
     pending: open.filter((session) => session.status === 'pending').length,
   };
 });
-const groupCount = computed(() => (group.value === 'ended' ? 0 : groupCounts.value[group.value]));
+const groupTitle = computed(() => GROUP_TITLES[group.value]);
+/* 已结束分组跟随列表结果（含搜索与筛选），其余分组沿用现有口径 */
+const groupCount = computed(() => (group.value === 'ended' ? visible.value.length : groupCounts.value[group.value]));
 
 /* ---------------- 会话操作 ---------------- */
 function selectSession(session: DemoSession) {
@@ -830,7 +944,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
     <div class="workspace-card">
       <aside class="list-pane">
         <header class="list-head">
-          <h2>会话列表</h2>
+          <h2>{{ groupTitle }}</h2>
           <span v-if="groupCount > 0" class="list-head-count">{{ groupCount }}</span>
           <ElPopover v-if="group === 'ended'" v-model:visible="filterOpen" placement="bottom-end" trigger="click" :width="400" :offset="8" :show-arrow="false" popper-class="inbox-filter-popper">
             <template #reference>
@@ -1075,6 +1189,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
         </div>
         <div class="composer-box" :class="{ 'is-disabled': !canSend }">
           <textarea
+            ref="composerInput"
             v-model="input"
             class="composer-input"
             rows="3"
@@ -1085,6 +1200,11 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
           <div class="composer-bar">
             <button type="button" class="composer-icon" :class="{ active: emojiOpen }" :disabled="!canSend" aria-label="表情" @click="emojiOpen = !emojiOpen"><QiEmojiSmile :size="18" /></button>
             <button type="button" class="composer-icon" :disabled="!canSend" aria-label="附件" @click="pickFiles"><QiAttachment :size="18" /></button>
+            <ElTooltip content="话术库" placement="top">
+              <span class="canned-tip">
+                <button type="button" class="composer-icon" :disabled="!canSend" aria-label="话术库" @click="openCanned"><QiBookOpen :size="18" /></button>
+              </span>
+            </ElTooltip>
             <button type="button" class="send-btn" :disabled="!input.trim() || !canSend" aria-label="发送" @click="send"><QiSendRight :size="18" /></button>
           </div>
           <div v-if="emojiOpen" class="emoji-panel">
@@ -1135,6 +1255,46 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
           <span class="transfer-name">{{ member.name }}</span>
         </button>
         <p v-if="!eligible.length" class="transfer-empty">当前没有可转接的成员。</p>
+      </div>
+    </ElDialog>
+
+    <ElDialog v-model="cannedOpen" title="话术库" width="720px" append-to-body @closed="focusComposerInput">
+      <div class="canned-body">
+        <aside class="canned-side">
+          <ElSelect v-model="cannedGroup" class="canned-group-select">
+            <ElOption v-for="item in CANNED_GROUPS" :key="item.name" :label="item.name" :value="item.name" />
+          </ElSelect>
+          <div class="canned-side-list">
+            <button v-for="item in cannedItems" :key="item.id" type="button" class="canned-side-item" @click="useCanned(item)">{{ item.content }}</button>
+            <p v-if="!cannedItems.length" class="canned-side-empty">暂无快捷消息</p>
+          </div>
+        </aside>
+        <section class="canned-main">
+          <div class="canned-toolbar">
+            <ElInput v-model="cannedKeyword" class="canned-search" placeholder="搜索内容" clearable>
+              <template #prefix><QiSearch :size="15" /></template>
+            </ElInput>
+            <ElButton class="ui-btn-outline">添加分组</ElButton>
+            <ElButton type="primary" class="ui-btn-primary">添加话术</ElButton>
+          </div>
+          <ElTable
+            :data="cannedItems"
+            class="canned-table"
+            empty-text="暂无快捷消息"
+            max-height="320"
+            row-class-name="canned-row"
+            @row-click="onCannedRowClick"
+          >
+            <ElTableColumn label="快捷内容" prop="content" min-width="220" show-overflow-tooltip />
+            <ElTableColumn label="备注" prop="note" width="120" show-overflow-tooltip />
+            <ElTableColumn label="操作" width="120">
+              <template #default>
+                <button type="button" class="canned-row-action">编辑</button>
+                <button type="button" class="canned-row-action">删除</button>
+              </template>
+            </ElTableColumn>
+          </ElTable>
+        </section>
       </div>
     </ElDialog>
 
@@ -1585,6 +1745,23 @@ a.attachment-name { text-decoration: underline; }
 .client-bubble em { display: block; margin-top: 5px; padding-top: 5px; color: var(--ink-2); font-size: 11px; font-style: normal; border-top: 1px dashed rgb(19 19 23 / 12%); }
 .client-empty { padding: 24px; color: var(--ink-3); font-size: 11px; text-align: center; }
 .client-preview > footer { padding: 9px 14px; color: var(--ink-3); font-size: 10px; line-height: 1.5; background: #fff; border-top: 1px solid var(--line); }
+/* ---------- 话术库 ---------- */
+.canned-tip { display: inline-flex; }
+.canned-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 360px; }
+.canned-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-right: 16px; border-right: 1px solid var(--line); }
+.canned-group-select { width: 100%; }
+.canned-side-list { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow: auto; }
+.canned-side-item { width: 100%; padding: 8px 10px; overflow: hidden; color: var(--ink-2); font: inherit; font-size: 13px; line-height: 1.5; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; background: transparent; border: 0; border-radius: 8px; transition: color 0.15s ease, background-color 0.15s ease; }
+.canned-side-item:hover { color: var(--ink); background: var(--surface-muted); }
+.canned-side-empty { margin: 0; padding: 24px 10px; color: var(--ink-3); font-size: 12px; text-align: center; }
+.canned-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-left: 16px; }
+.canned-toolbar { display: flex; align-items: center; gap: 8px; }
+.canned-search { flex: 1; min-width: 0; }
+.canned-table { width: 100%; }
+.canned-table :deep(.canned-row) { cursor: pointer; }
+.canned-table :deep(.canned-row:hover > td.el-table__cell) { background: var(--surface-muted); }
+.canned-row-action { padding: 0 6px; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; background: transparent; border: 0; }
+.canned-row-action:hover { color: var(--ink); }
 .edit-form { display: grid; gap: 12px; }
 .edit-form label { display: grid; gap: 6px; color: var(--ink-2); font-size: 13px; }
 

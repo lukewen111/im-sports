@@ -220,7 +220,7 @@ function copyId() {
 }
 .id-line {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-width: 0;
