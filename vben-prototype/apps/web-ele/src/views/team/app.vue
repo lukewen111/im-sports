@@ -526,7 +526,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
         </ElInput>
         <div class="team-table-viewport"><ElTable height="100%" :data="detailMembers.filter((member) => `${member.name}${member.account || member.id}`.toLowerCase().includes(keyword.toLowerCase()))" class="ui-table" empty-text="未找到符合条件的成员">
           <ElTableColumn label="成员" min-width="300">
-            <template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.name }}</b><small>{{ scope.row.account || scope.row.id }}</small></span></span></template>
+            <template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.account || scope.row.id }}</b><small>{{ scope.row.id }}</small></span></span></template>
           </ElTableColumn>
           <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="ui-tag" :class="scope.row.kind === 'ai' ? 'is-outline is-ai' : 'is-neutral'">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
           <ElTableColumn label="在线状态" min-width="130"><template #default="scope"><span class="online" :class="{ off: !scope.row.online }"><i class="status-dot" aria-hidden="true" />{{ scope.row.online ? '在线' : '离线' }}</span></template></ElTableColumn>
@@ -569,7 +569,7 @@ const disabledTeamIdsForMember = computed(() => editing.value?.kind === 'ai'
         </div>
 
         <div class="team-table-viewport"><ElTable v-if="currentView !== 'teams'" height="100%" class="ui-table" :data="pagedRows" :empty-text="keyword ? '未找到符合条件的成员' : (currentView === 'ai' ? '暂无 AI 成员' : (currentView === 'human' ? '暂无人类成员' : '暂无成员'))">
-          <ElTableColumn label="昵称" min-width="260"><template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.name }}</b><small>{{ scope.row.id }}</small></span></span></template></ElTableColumn>
+          <ElTableColumn label="成员" min-width="260"><template #default="scope"><span class="member-name"><i :style="memberAvatarStyle(scope.row)"><img v-if="scope.row.avatar" :src="scope.row.avatar" alt="" /><span v-else>{{ memberAvatarText(scope.row) }}</span></i><span><b>{{ scope.row.account || scope.row.id }}</b><small>{{ scope.row.id }}</small></span></span></template></ElTableColumn>
           <ElTableColumn label="角色" min-width="120"><template #default="scope"><span class="ui-tag" :class="scope.row.role === 'Owner' ? 'is-solid' : 'is-neutral'">{{ roleName(scope.row.role) }}</span></template></ElTableColumn>
           <ElTableColumn label="类型" min-width="130"><template #default="scope"><span class="ui-tag" :class="scope.row.kind === 'ai' ? 'is-outline is-ai' : 'is-neutral'">{{ scope.row.kind === 'ai' ? 'AI 成员' : '人类成员' }}</span></template></ElTableColumn>
           <ElTableColumn label="团队" min-width="220"><template #default="scope">{{ teamNames(scope.row.teamIds) }}</template></ElTableColumn>

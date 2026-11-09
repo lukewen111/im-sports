@@ -85,6 +85,9 @@ const ADMIN_ONLY_KEYS: PermKey[] = ['teams', 'humans', 'ai', 'channels', 'settin
 function blockedByKind(item: PermItem) {
   return isMemberKind.value && ADMIN_ONLY_KEYS.includes(item.key);
 }
+function groupBlockedByKind(group: PermGroup) {
+  return group.items.every((item) => blockedByKind(item));
+}
 
 function resetErrors() {
   Object.assign(errors, { name: '', kind: '', pages: '', permission: '' });
@@ -366,13 +369,13 @@ onBeforeRouteLeave(async () => {
       <section class="perm-section">
         <h2 class="section-label">权限范围</h2>
         <div v-for="group in matrix" :key="group.module" class="perm-group">
-          <div class="module-bar">
+          <div class="module-bar" :class="{ 'is-locked': groupBlockedByKind(group) }">
             <ElCheckbox :model-value="moduleChecked(group)" :indeterminate="moduleIndeterminate(group)" :disabled="moduleDisabled(group)" @change="(value) => toggleModule(group, value)">
               <span class="module-name">{{ group.module }}</span>
             </ElCheckbox>
           </div>
           <div class="perm-grid">
-            <div v-for="item in group.items" :key="item.key" class="perm-card">
+            <div v-for="item in group.items" :key="item.key" class="perm-card" :class="{ 'is-locked': blockedByKind(item) }">
               <div class="perm-row">
                 <ElCheckbox :model-value="checked(item)" :disabled="itemDisabled(item)" @change="(value) => toggleItem(item, value)">
                   <span class="perm-name">{{ item.label }}</span>
@@ -455,6 +458,14 @@ onBeforeRouteLeave(async () => {
 .module-bar :deep(.el-checkbox__input.is-checked .el-checkbox__inner), .perm-card :deep(.el-checkbox__input.is-checked .el-checkbox__inner) { background: var(--ui-ink); border-color: var(--ui-ink); }
 .module-bar :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner), .perm-card :deep(.el-checkbox__input.is-indeterminate .el-checkbox__inner) { background: var(--ui-ink); border-color: var(--ui-ink); }
 .module-bar :deep(.el-checkbox__input.is-disabled .el-checkbox__inner), .perm-card :deep(.el-checkbox__input.is-disabled .el-checkbox__inner) { background: var(--ui-surface-muted); border-color: var(--ui-line); }
+
+/* 禁用态：普通成员类型下不可授予的权限。.perm-name / .module-name 自带 color 会盖掉
+   Element Plus 的 .is-disabled 文字色，需在卡片与横条上单独降灰。 */
+.module-bar.is-locked { background: #f2f2f3; }
+.module-bar.is-locked .module-name, .perm-card.is-locked .perm-name { color: var(--ui-ink-muted); }
+.perm-card.is-locked { background: #fafafb; }
+.module-bar.is-locked :deep(.el-checkbox__input.is-disabled .el-checkbox__inner), .perm-card.is-locked :deep(.el-checkbox__input.is-disabled .el-checkbox__inner) { background: #ebebed; border-color: #dfdfe2; }
+.module-bar.is-locked :deep(.el-checkbox:hover .el-checkbox__inner), .perm-card.is-locked :deep(.el-checkbox:hover .el-checkbox__inner) { border-color: #dfdfe2; }
 
 .conflict-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 8px 12px; color: var(--ui-danger); background: var(--ui-surface); border: 1px solid var(--ui-line); border-radius: var(--ui-radius-control); font-size: 12px; }
 </style>
