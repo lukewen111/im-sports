@@ -1,27 +1,24 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+
 import { ElOption, ElSelect, ElSwitch } from 'element-plus';
 
 import { useDemoServiceStore } from '#/features/service/demo-store';
 import { usePrototypeAccess } from '#/features/team/access-store';
 
-import PageShell from '../page-shell.vue';
-
 const LANGUAGES = ['简体中文', '繁体中文', '英语', '越南语', '泰语', '高棉语', '缅甸语', '老挝语', '西班牙语'];
 
 const access = usePrototypeAccess();
 const store = useDemoServiceStore();
-const member = computed(() => access.current);
-const canAccess = computed(() => Boolean(access.permissions.settings));
 const memberId = computed(() => access.current?.id || access.currentId);
 
 const settings = computed(() => store.memberTranslationFor(memberId.value));
 
-function setReceiveTranslation(value: string | number | boolean) {
+function setReceiveTranslation(value: boolean | number | string) {
   store.setMemberTranslation(memberId.value, { receiveTranslation: Boolean(value) });
 }
 
-function setSendTranslation(value: string | number | boolean) {
+function setSendTranslation(value: boolean | number | string) {
   store.setMemberTranslation(memberId.value, { sendTranslation: Boolean(value) });
 }
 
@@ -39,12 +36,8 @@ function setVisitorLanguage(value: string) {
 </script>
 
 <template>
-  <PageShell
-    :can-access="canAccess"
-    :member-name="member?.name"
-  >
-    <section class="settings-card">
-      <div class="setting-list">
+  <section class="settings-card">
+    <div class="setting-list">
         <div class="setting-row">
           <div class="row-line">
             <span class="row-title">接收消息自动翻译</span>
@@ -164,9 +157,8 @@ function setVisitorLanguage(value: string) {
             <ElOption v-for="language in LANGUAGES" :key="language" :label="language" :value="language" />
           </ElSelect>
         </div>
-      </div>
-    </section>
-  </PageShell>
+    </div>
+  </section>
 </template>
 
 <style scoped>

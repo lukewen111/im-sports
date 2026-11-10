@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
+
 import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChannelStore } from '../channels/channel-store';
 import { useTeamStore } from '../team/team-store';
@@ -23,6 +25,30 @@ beforeEach(() => {
 });
 
 describe('聊天、客户与渠道联动', () => {
+  it('界面语言按账号保存并恢复，不改变消息翻译设置', async () => {
+    const store = useDemoServiceStore();
+    const translation = { ...store.memberTranslationFor('member-owner') };
+    store.savePersonal('member-owner', { locale: 'km-KH' });
+    store.savePersonal('member-sophie', { locale: 'my-MM' });
+    await nextTick();
+    setActivePinia(createPinia());
+    const restored = useDemoServiceStore();
+    expect(restored.settingsFor('member-owner').locale).toBe('km-KH');
+    expect(restored.settingsFor('member-sophie').locale).toBe('my-MM');
+    expect(restored.settingsFor('member-mika').locale).toBe('zh-CN');
+    expect(restored.memberTranslationFor('member-owner')).toEqual(translation);
+  });
+
+  it('账号时区按成员保存并恢复', async () => {
+    const store = useDemoServiceStore();
+    store.savePersonal('member-owner', { timezone: 'UTC+00:00' });
+    await nextTick();
+    setActivePinia(createPinia());
+    const restored = useDemoServiceStore();
+    expect(restored.settingsFor('member-owner').timezone).toBe('UTC+00:00');
+    expect(useTeamStore().memberById('member-owner')?.timezone).toBe('UTC+00:00');
+  });
+
   it('客户消息按渠道团队生成唯一未结束会话并累计未读', () => {
     const store = useDemoServiceStore();
     const payload = { channelId: 'channel-web-widget-main', identityId: 'visitor:test-001', sessionId: 'conversation-test', teamId: '100001' };

@@ -1447,7 +1447,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
 .conv-mid { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .conv-mid small { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--ink-2); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .wait { flex: 0 0 auto; margin-left: auto; color: var(--ink-3); font-size: 10px; }
-.unread { flex: 0 0 auto; padding: 1px 6px; font-style: normal; color: #fff; background: var(--danger); border-radius: 999px; }
+.unread { display: grid; flex: 0 0 20px; width: 20px; height: 20px; padding: 0; font-size: 11px; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 500; line-height: 1; color: #fff; background: var(--danger); border-radius: 50%; place-items: center; }
 .list-empty { display: grid; gap: 8px; place-items: center; padding: 48px 20px; color: var(--ink-3); font-size: 12px; text-align: center; }
 .empty-dot { width: 26px; height: 26px; border: 1px dashed var(--line-strong); border-radius: 50%; }
 

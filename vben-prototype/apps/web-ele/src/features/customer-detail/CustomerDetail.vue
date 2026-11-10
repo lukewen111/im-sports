@@ -53,6 +53,7 @@ const activeSession = computed(() => {
 interface BusinessInfo {
   agentLine: string;
   platform: string;
+  playerAccount: string;
   playerId: string;
   recharge: string;
   total: string;
@@ -63,10 +64,11 @@ interface BusinessInfo {
 }
 
 const EMPTY_BUSINESS: BusinessInfo = {
-  agentLine: '', platform: '', playerId: '', recharge: '', total: '', vipLevel: '', withdraw: '', withdrawable: '', withheld: '',
+  agentLine: '', platform: '', playerAccount: '', playerId: '', recharge: '', total: '', vipLevel: '', withdraw: '', withdrawable: '', withheld: '',
 };
 
 const PLATFORMS = ['IM Sports', 'IMS Gaming'];
+const PLAYER_ACCOUNT_BASE = 91_794_094_134;
 const round = (value: number) => Math.round(value * 100) / 100;
 /** 金额统一千分位 + 两位小数 */
 const money = (value: number) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -86,6 +88,7 @@ const business = computed<BusinessInfo>(() => {
   return {
     agentLine: `AG-${1000 + (seed % 9000)}`,
     platform: PLATFORMS[seed % PLATFORMS.length] ?? 'IM Sports',
+    playerAccount: `mmhl${PLAYER_ACCOUNT_BASE + seed}`,
     playerId: digits,
     recharge: money(recharge),
     total: money(total),
@@ -99,24 +102,39 @@ const business = computed<BusinessInfo>(() => {
 /** 无值统一显示「-」，不隐藏整行 */
 const show = (value: string) => value || '-';
 
-const businessGroups = computed(() => [
+interface BusinessField {
+  copy: boolean;
+  label: string;
+  rawValue: string;
+  value: string;
+  /** 值可能较长，独占一行展示，避免被压缩或省略 */
+  wide?: boolean;
+}
+
+function copyBusinessField(value: string, label: string) {
+  if (!value) return;
+  void hook.copyText(value, label);
+}
+
+const businessGroups = computed<{ fields: BusinessField[]; title: string }[]>(() => [
   {
     title: '基础信息',
     fields: [
-      { label: '玩家 ID', value: show(business.value.playerId) },
-      { label: 'VIP 等级', value: show(business.value.vipLevel) },
+      { copy: true, label: '玩家账号', rawValue: business.value.playerAccount, value: show(business.value.playerAccount), wide: true },
+      { copy: true, label: '玩家 ID', rawValue: business.value.playerId, value: show(business.value.playerId), wide: true },
+      { copy: false, label: 'VIP 等级', rawValue: business.value.vipLevel, value: show(business.value.vipLevel) },
     ],
   },
   {
     title: '平台信息',
     fields: [
-      { label: '平台', value: show(business.value.platform) },
-      { label: '代理线', value: show(business.value.agentLine) },
-      { label: '充值统计', value: show(business.value.recharge) },
-      { label: '提现统计', value: show(business.value.withdraw) },
-      { label: '总额', value: show(business.value.total) },
-      { label: '不可提现余额', value: show(business.value.withheld) },
-      { label: '可提现余额', value: show(business.value.withdrawable) },
+      { copy: false, label: '平台', rawValue: business.value.platform, value: show(business.value.platform) },
+      { copy: false, label: '代理线', rawValue: business.value.agentLine, value: show(business.value.agentLine) },
+      { copy: false, label: '充值统计', rawValue: business.value.recharge, value: show(business.value.recharge) },
+      { copy: false, label: '提现统计', rawValue: business.value.withdraw, value: show(business.value.withdraw) },
+      { copy: false, label: '总额', rawValue: business.value.total, value: show(business.value.total) },
+      { copy: false, label: '不可提现余额', rawValue: business.value.withheld, value: show(business.value.withheld) },
+      { copy: false, label: '可提现余额', rawValue: business.value.withdrawable, value: show(business.value.withdrawable) },
     ],
   },
 ]);
@@ -199,9 +217,21 @@ const businessGroups = computed(() => [
         <section v-for="group in businessGroups" :key="group.title" class="business-group">
           <h3 class="business-title">{{ group.title }}</h3>
           <div class="business-grid">
-            <div v-for="field in group.fields" :key="field.label" class="business-field">
+            <div v-for="field in group.fields" :key="field.label" class="business-field" :class="{ 'is-wide': field.wide }">
               <span class="business-label">{{ field.label }}</span>
-              <span class="business-value" :class="{ 'is-empty': field.value === '-' }">{{ field.value }}</span>
+              <span class="business-value-row">
+                <span class="business-value" :class="{ 'is-empty': field.value === '-' }">{{ field.value }}</span>
+                <ElTooltip v-if="field.copy && field.rawValue" :content="`复制${field.label}`" placement="top">
+                  <button
+                    type="button"
+                    class="business-copy-button"
+                    :aria-label="`复制${field.label}`"
+                    @click="copyBusinessField(field.rawValue, field.label)"
+                  >
+                    <component :is="icons.copy" :size="13" />
+                  </button>
+                </ElTooltip>
+              </span>
             </div>
           </div>
         </section>
@@ -356,19 +386,48 @@ const businessGroups = computed(() => [
   gap: 2px;
   min-width: 0;
 }
+/* 玩家账号、玩家 ID 等长值独占一行，避免窄栏内被压缩 */
+.business-field.is-wide {
+  grid-column: 1 / -1;
+}
 .business-label {
-  overflow: hidden;
   color: #8c8c8e;
   font-size: 12px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 16px;
+  overflow-wrap: anywhere;
 }
 .business-value {
-  overflow: hidden;
   color: #131317;
   font-size: 13px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.business-value-row {
+  display: flex;
+  gap: 4px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.business-value-row .business-value {
+  min-width: 0;
+}
+.business-copy-button {
+  display: grid;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: #8c8c8e;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  place-items: center;
+}
+.business-copy-button:hover {
+  color: #1664ff;
+  background: #f2f3f5;
 }
 .business-value.is-empty {
   color: #8c8c8e;

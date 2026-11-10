@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 顶栏浮层接入点：layouts/basic.vue 的 #user-dropdown 插槽渲染本组件，并监听 @logout。
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { loadLocaleMessages } from '@vben/locales';
 import { updatePreferences } from '@vben/preferences';
@@ -9,10 +10,11 @@ import { ElMessage } from 'element-plus';
 
 import QIcon from '#/components/q-icon/QIcon.vue';
 import { useDemoServiceStore } from '#/features/service/demo-store';
+import { interfaceMessageLocale, INTERFACE_LANGUAGES as LANGUAGE_LABELS, type InterfaceLocale as SupportedLocale } from '#/features/service/interface-locale';
 
 import { useProfileIdentity } from './profile-identity';
 
-type SupportedLocale = 'en-US' | 'zh-CN';
+const emit = defineEmits<{ logout: [] }>();
 
 const COPY = {
   'zh-CN': {
@@ -20,44 +22,86 @@ const COPY = {
     online: '在线',
     offline: '离线',
     language: '界面语言',
+    timezone: '时区',
+    profile: '个人资料',
     logout: '退出登录',
     onlineOn: '已上线，将参与新会话分配',
     onlineOff: '已离线，停止接收新会话',
     localeSaved: '界面语言已切换',
     localeFailed: '界面语言保存失败，请重试',
+    timezoneSaved: '时区已保存',
   },
   'en-US': {
     acceptChat: 'Accept chats',
     online: 'Online',
     offline: 'Offline',
     language: 'Interface language',
+    timezone: 'Time zone',
+    profile: 'Personal profile',
     logout: 'Log out',
     onlineOn: 'You are online and can receive new sessions',
     onlineOff: 'You are offline and will not receive new sessions',
     localeSaved: 'Interface language updated',
     localeFailed: 'Failed to save the interface language. Please retry.',
+    timezoneSaved: 'Time zone saved',
   },
 } as const;
 
-const LANGUAGE_LABELS: Record<SupportedLocale, string> = {
-  'zh-CN': '简体中文',
-  'en-US': 'English',
-};
-
-const emit = defineEmits<{ logout: [] }>();
 
 const store = useDemoServiceStore();
 const identity = useProfileIdentity();
+const router = useRouter();
+
+const TIMEZONE_LABELS = {
+  'UTC-12:00': 'UTC-12:00 贝克岛',
+  'UTC-11:00': 'UTC-11:00 美属萨摩亚',
+  'UTC-10:00': 'UTC-10:00 夏威夷',
+  'UTC-09:00': 'UTC-09:00 阿拉斯加',
+  'UTC-08:00': 'UTC-08:00 太平洋时间（美国和加拿大）',
+  'UTC-07:00': 'UTC-07:00 山地时间（美国和加拿大）',
+  'UTC-06:00': 'UTC-06:00 中部时间（美国和加拿大）',
+  'UTC-05:00': 'UTC-05:00 东部时间（美国和加拿大）',
+  'UTC-04:00': 'UTC-04:00 大西洋时间（加拿大）',
+  'UTC-03:00': 'UTC-03:00 巴西利亚',
+  'UTC-02:00': 'UTC-02:00 中大西洋',
+  'UTC-01:00': 'UTC-01:00 亚速尔群岛',
+  'UTC+00:00': 'UTC+00:00 格林尼治标准时间',
+  'UTC+01:00': 'UTC+01:00 中欧时间',
+  'UTC+02:00': 'UTC+02:00 东欧时间',
+  'UTC+03:00': 'UTC+03:00 莫斯科时间',
+  'UTC+04:00': 'UTC+04:00 海湾标准时间',
+  'UTC+05:00': 'UTC+05:00 巴基斯坦标准时间',
+  'UTC+05:30': 'UTC+05:30 印度标准时间',
+  'UTC+06:00': 'UTC+06:00 孟加拉国标准时间',
+  'UTC+07:00': 'UTC+07:00 中南半岛时间',
+  'UTC+08:00': 'UTC+08:00 北京时间',
+  'UTC+09:00': 'UTC+09:00 日本标准时间',
+  'UTC+10:00': 'UTC+10:00 澳大利亚东部时间',
+  'UTC+11:00': 'UTC+11:00 所罗门群岛时间',
+  'UTC+12:00': 'UTC+12:00 新西兰标准时间',
+  'UTC+13:00': 'UTC+13:00 萨摩亚时间',
+  'UTC+14:00': 'UTC+14:00 莱恩群岛时间',
+} as const;
+type SupportedTimezone = keyof typeof TIMEZONE_LABELS;
 
 const open = ref(false);
 const languageOpen = ref(false);
+const timezoneOpen = ref(false);
+const savingLocale = ref(false);
 const triggerRef = ref<HTMLElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
+const timezoneTriggerRef = ref<HTMLElement | null>(null);
+const timezonePanelRef = ref<HTMLElement | null>(null);
 const position = reactive({ right: 8, top: 56 });
+const timezonePosition = reactive({ left: 8, top: 56 });
 
 const member = computed(() => identity.value.member);
 const locale = computed<SupportedLocale>(() => (member.value ? store.settingsFor(member.value.id).locale : 'zh-CN'));
-const t = computed(() => COPY[locale.value] || COPY['zh-CN']);
+const timezone = computed<SupportedTimezone>(() => {
+  const value = member.value ? store.settingsFor(member.value.id).timezone : 'UTC+08:00';
+  return value in TIMEZONE_LABELS ? value as SupportedTimezone : 'UTC+08:00';
+});
+const t = computed(() => COPY[interfaceMessageLocale(locale.value)]);
 const online = computed(() => Boolean(member.value?.online));
 const username = computed(() => {
   const account = member.value?.account || '';
@@ -72,10 +116,28 @@ function updatePosition() {
   position.right = Math.max(8, window.innerWidth - rect.right);
 }
 
+function updateTimezonePosition() {
+  const rect = timezoneTriggerRef.value?.getBoundingClientRect();
+  if (!rect) return;
+  const menuRect = panelRef.value?.getBoundingClientRect();
+  const panelWidth = Math.min(360, window.innerWidth - 16);
+  const panelHeight = timezonePanelRef.value?.offsetHeight || 480;
+  const gap = 8;
+  const preferredLeft = (menuRect?.left ?? rect.left) - panelWidth - gap;
+  timezonePosition.left = preferredLeft >= 8
+    ? preferredLeft
+    : Math.min(window.innerWidth - panelWidth - 8, (menuRect?.right ?? rect.right) + gap);
+  timezonePosition.top = Math.min(
+    Math.max(8, rect.top - 6),
+    Math.max(8, window.innerHeight - panelHeight - 8),
+  );
+}
+
 function toggleMenu() {
   open.value = !open.value;
   if (open.value) {
     languageOpen.value = false;
+    timezoneOpen.value = false;
     updatePosition();
   }
 }
@@ -83,21 +145,34 @@ function toggleMenu() {
 function closeMenu() {
   open.value = false;
   languageOpen.value = false;
+  timezoneOpen.value = false;
 }
 
 function onDocumentPointer(event: MouseEvent) {
   if (!open.value) return;
   const target = event.target as Node;
-  if (triggerRef.value?.contains(target) || panelRef.value?.contains(target)) return;
+  if (
+    triggerRef.value?.contains(target)
+    || panelRef.value?.contains(target)
+    || timezonePanelRef.value?.contains(target)
+  ) return;
   closeMenu();
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && open.value) closeMenu();
+  if (event.key !== 'Escape' || !open.value) return;
+  if (timezoneOpen.value) {
+    timezoneOpen.value = false;
+    timezoneTriggerRef.value?.focus();
+    return;
+  }
+  closeMenu();
 }
 
 function onViewportChange() {
-  if (open.value) updatePosition();
+  if (!open.value) return;
+  updatePosition();
+  if (timezoneOpen.value) updateTimezonePosition();
 }
 
 function toggleAccepting() {
@@ -105,7 +180,7 @@ function toggleAccepting() {
   const next = !online.value;
   store.savePersonal(member.value.id, { accepting: next });
   if (Boolean(member.value.online) !== next) {
-    ElMessage.error(locale.value === 'zh-CN' ? '状态切换失败，请重试' : 'Failed to switch status. Please retry.');
+    ElMessage.error(interfaceMessageLocale(locale.value) === 'zh-CN' ? '状态切换失败，请重试' : 'Failed to switch status. Please retry.');
     return;
   }
   ElMessage.success(next ? t.value.onlineOn : t.value.onlineOff);
@@ -113,24 +188,49 @@ function toggleAccepting() {
 
 function toggleLanguage() {
   languageOpen.value = !languageOpen.value;
+  timezoneOpen.value = false;
+}
+
+function toggleTimezone() {
+  timezoneOpen.value = !timezoneOpen.value;
+  languageOpen.value = false;
+  if (timezoneOpen.value) void nextTick(updateTimezonePosition);
+}
+
+function selectTimezone(value: string) {
+  if (!member.value) return;
+  if (!(value in TIMEZONE_LABELS)) return;
+  store.savePersonal(member.value.id, { timezone: value as SupportedTimezone });
+  timezoneOpen.value = false;
+  ElMessage.success(t.value.timezoneSaved);
+}
+
+function openProfile() {
+  closeMenu();
+  void router.push('/personal');
 }
 
 async function selectLocale(value: SupportedLocale) {
+  if (savingLocale.value) return;
   if (!member.value || value === locale.value) {
     languageOpen.value = false;
     return;
   }
   const previous = store.settingsFor(member.value.id).locale;
-  store.savePersonal(member.value.id, { locale: value });
+  const memberId = member.value.id;
+  savingLocale.value = true;
   try {
-    updatePreferences({ app: { locale: value } });
-    await loadLocaleMessages(value);
-    ElMessage.success(COPY[value].localeSaved);
+    await loadLocaleMessages(interfaceMessageLocale(value));
+    updatePreferences({ app: { locale: interfaceMessageLocale(value) } });
+    store.savePersonal(memberId, { locale: value });
+    ElMessage.success(COPY[interfaceMessageLocale(value)].localeSaved);
   } catch {
-    store.savePersonal(member.value.id, { locale: previous });
-    updatePreferences({ app: { locale: previous } });
-    await loadLocaleMessages(previous).catch(() => {});
-    ElMessage.error(COPY[previous].localeFailed);
+    store.savePersonal(memberId, { locale: previous });
+    updatePreferences({ app: { locale: interfaceMessageLocale(previous) } });
+    await loadLocaleMessages(interfaceMessageLocale(previous)).catch(() => {});
+    ElMessage.error(COPY[interfaceMessageLocale(previous)].localeFailed);
+  } finally {
+    savingLocale.value = false;
   }
   languageOpen.value = false;
 }
@@ -140,6 +240,16 @@ function logout() {
   closeMenu();
   emit('logout');
 }
+
+watch(() => member.value?.id, async () => {
+  const restored = interfaceMessageLocale(locale.value);
+  try {
+    await loadLocaleMessages(restored);
+    updatePreferences({ app: { locale: restored } });
+  } catch {
+    ElMessage.error(t.value.localeFailed);
+  }
+}, { immediate: true });
 
 onMounted(() => {
   document.addEventListener('mousedown', onDocumentPointer);
@@ -180,7 +290,7 @@ onBeforeUnmount(() => {
         ref="panelRef"
         class="menu-panel"
         role="menu"
-        :style="{ top: `${position.top}px`, right: `${position.right}px` }"
+        :style="{ top: `${position.top}px`, right: `${position.right}px`, maxHeight: `calc(100dvh - ${position.top + 8}px)`, overflowY: 'auto' }"
       >
         <header class="panel-head">
           <span class="head-avatar" :style="{ backgroundColor: identity.avatarColor }">
@@ -232,6 +342,7 @@ onBeforeUnmount(() => {
               :key="item"
               type="button"
               class="menu-row language-option"
+              :disabled="savingLocale"
               role="menuitemradio"
               :aria-checked="locale === item"
               @click="selectLocale(item)"
@@ -240,11 +351,52 @@ onBeforeUnmount(() => {
               <QIcon v-if="locale === item" class="check-icon" name="check" :size="16" />
             </button>
           </template>
+
+          <button
+            ref="timezoneTriggerRef"
+            type="button"
+            class="menu-row is-clickable"
+            :aria-expanded="timezoneOpen"
+            aria-haspopup="menu"
+            @click="toggleTimezone"
+          >
+            <span class="row-label">{{ t.timezone }}</span>
+            <span class="row-tail">
+              <span class="row-value">{{ TIMEZONE_LABELS[timezone] }}</span>
+              <QIcon class="row-icon" :class="{ 'is-open': timezoneOpen }" name="chevron-right" :size="16" />
+            </span>
+          </button>
+          <button type="button" class="menu-row is-clickable" role="menuitem" @click="openProfile">
+            <span class="row-label">{{ t.profile }}</span>
+            <QIcon class="row-icon" name="chevron-right" :size="16" />
+          </button>
         </div>
 
         <button type="button" class="logout-row" role="menuitem" @click="logout">
           <span class="row-label">{{ t.logout }}</span>
           <QIcon class="power-icon" name="power" :size="18" />
+        </button>
+      </div>
+
+      <div
+        v-if="open && timezoneOpen"
+        ref="timezonePanelRef"
+        class="timezone-popover"
+        role="menu"
+        :aria-label="t.timezone"
+        :style="{ top: `${timezonePosition.top}px`, left: `${timezonePosition.left}px` }"
+      >
+        <button
+          v-for="(label, value) in TIMEZONE_LABELS"
+          :key="value"
+          type="button"
+          class="timezone-option"
+          role="menuitemradio"
+          :aria-checked="timezone === value"
+          @click="selectTimezone(value)"
+        >
+          <span>{{ label }}</span>
+          <QIcon v-if="timezone === value" class="check-icon" name="check" :size="16" />
         </button>
       </div>
     </Teleport>
@@ -330,6 +482,55 @@ onBeforeUnmount(() => {
   background: #fff;
   border: 1px solid #ececed;
   border-radius: 16px;
+}
+
+.timezone-popover {
+  position: fixed;
+  z-index: 2210;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(480px, calc(100dvh - 16px));
+  padding: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgb(19 19 23 / 12%);
+}
+
+.timezone-option {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  color: #62626d;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+
+.timezone-option:hover,
+.timezone-option:focus-visible {
+  color: #131317;
+  background: #f5f5f5;
+  outline: none;
+}
+
+.timezone-option[aria-checked='true'] {
+  color: #131317;
+  font-weight: 500;
+}
+
+.timezone-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-head {

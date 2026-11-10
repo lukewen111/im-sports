@@ -5,6 +5,7 @@ import { ElInput, ElMessage, ElSwitch } from 'element-plus';
 
 import QIcon from '#/components/q-icon/QIcon.vue';
 import { useDemoServiceStore } from '#/features/service/demo-store';
+import { interfaceMessageLocale } from '#/features/service/interface-locale';
 import { usePrototypeAccess } from '#/features/team/access-store';
 
 type SupportedLocale = 'en-US' | 'zh-CN';
@@ -97,7 +98,7 @@ const passwordOpen = ref(false);
 const password = reactive({ confirm: '', current: '', next: '' });
 const activeSection = ref<string>(SECTIONS[0].id);
 
-const currentLocale = computed<SupportedLocale>(() => (member.value ? store.settingsFor(member.value.id).locale : 'zh-CN'));
+const currentLocale = computed<SupportedLocale>(() => interfaceMessageLocale(member.value ? store.settingsFor(member.value.id).locale : 'zh-CN'));
 const t = computed(() => COPY[currentLocale.value] || COPY['zh-CN']);
 const sections = computed(() => SECTIONS.map((item) => ({ id: item.id, index: item.index, label: t.value[item.key] })));
 const online = computed(() => Boolean(member.value?.online));

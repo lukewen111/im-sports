@@ -1,10 +1,15 @@
-import { ref, watch } from 'vue';
-import { defineStore } from 'pinia';
 import type { ChannelType } from '../channels/channel-data';
+import type { InterfaceLocale } from './interface-locale';
+
+import { ref, watch } from 'vue';
+
+import { defineStore } from 'pinia';
+
 import { useChannelStore } from '../channels/channel-store';
 import { DEFAULT_TEAM_ID } from '../team/team-constants';
 import { useTeamStore } from '../team/team-store';
 import { presetTranslations, seedCustomers, seedSessions } from './demo-seed';
+import { normalizeInterfaceLocale } from './interface-locale';
 import { corpusTranslation } from './translation-corpus';
 
 export type SessionStatus = 'active' | 'ended' | 'pending';
@@ -124,6 +129,11 @@ export interface ReceptionSettings {
   // 租户级会话时限
   firstResponseMinutes: number;
   inactiveCloseMinutes: number;
+  // 回复超时预警阈值（分钟），仅用于界面配置展示，不参与任何业务计算
+  alertRedMinutes: number;
+  alertOrangeMinutes: number;
+  alertYellowMinutes: number;
+  alertBlueMinutes: number;
   // 兼容旧视图的租户级占位字段；成员级通知/翻译请使用 memberNotificationFor / memberTranslationFor
   browserNotification: boolean;
   receiveTranslation: boolean;
@@ -160,8 +170,9 @@ export interface MemberTranslationSettings {
 export interface PersonalSettings {
   accepting: boolean;
   avatar?: string;
-  locale: 'en-US' | 'zh-CN';
+  locale: InterfaceLocale;
   nickname: string;
+  timezone: string;
 }
 
 export interface RecallResult {
@@ -259,9 +270,12 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
   const saved = loadState();
   const customers = ref<DemoCustomer[]>(applyPresence(Array.isArray(saved.customers) && saved.customers.length > 0 ? saved.customers : clone(seedCustomers)));
   const sessions = ref<DemoSession[]>(Array.isArray(saved.sessions) && saved.sessions.length > 0 ? saved.sessions : seedSessions());
-  const reception = ref<ReceptionSettings>(saved.reception || {
+  // 默认值打底再合并已存配置，保证后续新增字段对历史数据也有默认值
+  const reception = ref<ReceptionSettings>({
+    alertBlueMinutes: 5, alertOrangeMinutes: 15, alertRedMinutes: 20, alertYellowMinutes: 10,
     browserNotification: false, firstResponseMinutes: 2, inactiveCloseMinutes: 10, receiveTranslation: false,
     sendTranslation: false, sound: true, titleBlink: true, visitorLanguage: '英语', workLanguage: '简体中文',
+    ...saved.reception,
   });
   const autoMessages = ref<AutoMessageSettings>({ ...seedAutoMessages(), ...saved.autoMessages });
   const personal = ref<Record<string, PersonalSettings>>(saved.personal || {});
@@ -301,9 +315,12 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
   });
   const memberNotificationFor = (memberId: string): MemberNotificationSettings => ({ ...defaultNotification(), ...memberNotifications.value[memberId] });
   const memberTranslationFor = (memberId: string): MemberTranslationSettings => ({ ...defaultTranslation(), ...memberTranslations.value[memberId] });
-  const settingsFor = (memberId: string): PersonalSettings => personal.value[memberId] || {
-    accepting: Boolean(team.memberById(memberId)?.online), locale: 'zh-CN', nickname: team.memberById(memberId)?.name || '',
-  };
+  const settingsFor = (memberId: string): PersonalSettings => ({
+    accepting: Boolean(team.memberById(memberId)?.online), nickname: team.memberById(memberId)?.name || '',
+    timezone: team.memberById(memberId)?.timezone || 'UTC+08:00',
+    ...personal.value[memberId],
+    locale: normalizeInterfaceLocale(personal.value[memberId]?.locale),
+  });
 
   const visitSummary = (customerId: string) => {
     const customer = customerById(customerId);
@@ -658,6 +675,7 @@ export const useDemoServiceStore = defineStore('demo-service', () => {
       if (patch.nickname) member.name = patch.nickname;
       if (patch.avatar !== undefined) member.avatar = patch.avatar;
       if (patch.accepting !== undefined) member.online = patch.accepting && Boolean(member.enabled);
+      if (patch.timezone !== undefined) member.timezone = patch.timezone;
       member.version += 1;
     }
   }

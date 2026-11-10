@@ -1,19 +1,17 @@
 <script setup lang="ts">
+import type { MemberNotificationSettings } from '#/features/service/demo-store';
+
 import { computed } from 'vue';
+
 import { ElCheckbox, ElTooltip } from 'element-plus';
 
 import { useDemoServiceStore } from '#/features/service/demo-store';
-import type { MemberNotificationSettings } from '#/features/service/demo-store';
 import { usePrototypeAccess } from '#/features/team/access-store';
-
-import PageShell from '../page-shell.vue';
 
 type NotificationKey = keyof MemberNotificationSettings;
 
 const access = usePrototypeAccess();
 const store = useDemoServiceStore();
-const member = computed(() => access.current);
-const canAccess = computed(() => Boolean(access.permissions.settings));
 const memberId = computed(() => access.current?.id || access.currentId);
 
 const settings = computed(() => store.memberNotificationFor(memberId.value));
@@ -36,36 +34,31 @@ const options: Array<{ description: string; key: NotificationKey; label: string 
   },
 ];
 
-function toggle(key: NotificationKey, value: string | number | boolean) {
+function toggle(key: NotificationKey, value: boolean | number | string) {
   store.setMemberNotification(memberId.value, { [key]: Boolean(value) });
 }
 </script>
 
 <template>
-  <PageShell
-    :can-access="canAccess"
-    :member-name="member?.name"
-  >
-    <section class="settings-card">
-      <header class="card-head">
-        <h2>通知方式</h2>
-      </header>
+  <section class="settings-card">
+    <header class="card-head">
+      <h2>通知方式</h2>
+    </header>
 
-      <div class="option-list">
-        <div v-for="option in options" :key="option.key" class="option-row">
-          <ElCheckbox
-            :model-value="settings[option.key]"
-            @change="(value) => toggle(option.key, value)"
-          >
-            {{ option.label }}
-          </ElCheckbox>
-          <ElTooltip :content="option.description" placement="top" :show-after="150">
-            <button class="help-dot" type="button" :aria-label="`${option.label}说明`">?</button>
-          </ElTooltip>
-        </div>
+    <div class="option-list">
+      <div v-for="option in options" :key="option.key" class="option-row">
+        <ElCheckbox
+          :model-value="settings[option.key]"
+          @change="(value) => toggle(option.key, value)"
+        >
+          {{ option.label }}
+        </ElCheckbox>
+        <ElTooltip :content="option.description" placement="top" :show-after="150">
+          <button class="help-dot" type="button" :aria-label="`${option.label}说明`">?</button>
+        </ElTooltip>
       </div>
-    </section>
-  </PageShell>
+    </div>
+  </section>
 </template>
 
 <style scoped>

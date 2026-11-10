@@ -4,7 +4,6 @@ import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
 
 import { qicon } from '#/components/q-icon/menu-icons';
-
 import { $t } from '#/locales';
 
 const BasicLayout = () => import('#/layouts/basic.vue');
@@ -140,16 +139,10 @@ const coreRoutes: RouteRecordRaw[] = [
             meta: { icon: qicon('settings'), title: '会话设置' },
           },
           {
-            name: 'NotificationSettings',
-            path: 'reception/notification',
-            component: () => import('#/views/settings/notification/app.vue'),
-            meta: { icon: qicon('bell'), title: '消息通知' },
-          },
-          {
-            name: 'ChatTools',
-            path: 'reception/tools',
-            component: () => import('#/views/settings/tools/app.vue'),
-            meta: { icon: qicon('message-circle-text'), title: '聊天工具' },
+            name: 'ResponseAlertSettings',
+            path: 'reception/response-alert',
+            component: () => import('#/views/settings/response-alert/app.vue'),
+            meta: { icon: qicon('clock'), title: '回复超时预警设置' },
           },
         ],
       },
@@ -159,7 +152,7 @@ const coreRoutes: RouteRecordRaw[] = [
         redirect: '/settings/reception/auto-message',
         meta: { hideInMenu: true, hideInTab: true, title: '聊天与接待' },
       },
-      { name: 'Personal', path: 'personal', component: () => import('#/views/personal/app.vue'), meta: { hideInMenu: true, icon: qicon('user'), title: '个人中心' } },
+      { name: 'Personal', path: 'personal', component: () => import('#/views/personal/profile.vue'), meta: { hideInMenu: true, icon: qicon('user'), title: '个人资料' } },
     ],
   },
   {

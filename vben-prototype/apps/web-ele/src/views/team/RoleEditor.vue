@@ -71,7 +71,7 @@ const matrix: PermGroup[] = [
   },
   {
     module: '设置',
-    items: [{ key: 'settings', label: '聊天与接待', hint: '可访问会话设置、消息通知、聊天工具全部功能，无数据范围。' }],
+    items: [{ key: 'settings', label: '聊天与接待', hint: '可访问自动消息设置与会话设置全部功能，无数据范围。' }],
   },
 ];
 
