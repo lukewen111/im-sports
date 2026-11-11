@@ -1,6 +1,6 @@
 import { defineOverridesPreferences } from '@vben/preferences';
 
-const logoSource = `${import.meta.env.BASE_URL}im-support-logo.svg`;
+const logoSource = `${import.meta.env.BASE_URL}chatscale-symbol.svg`;
 
 /**
  * @description 项目配置文件
@@ -14,7 +14,7 @@ export const overridesPreferences = defineOverridesPreferences({
     enableCheckUpdates: false,
     enablePreferences: false,
     layout: 'sidebar-nav',
-    name: 'IM Support',
+    name: 'ChatScale',
   },
   breadcrumb: {
     enable: false,

@@ -20,6 +20,8 @@ import LoginForm from '#/views/_core/authentication/login.vue';
 import PersonalUserMenu from '#/views/personal/user-menu.vue';
 import { resolveProfileIdentity } from '#/views/personal/profile-identity';
 
+const brandWordmarkSource = `${import.meta.env.BASE_URL}chatscale-wordmark.svg`;
+
 const router = useRouter();
 const userStore = useUserStore();
 const authStore = useAuthStore();
@@ -127,6 +129,13 @@ watch(
 
 <template>
   <BasicLayout @clear-preferences-and-logout="handleLogout">
+    <template #logo-text>
+      <img
+        :src="brandWordmarkSource"
+        alt="ChatScale"
+        class="h-[22px] w-[112px] object-contain object-left"
+      />
+    </template>
     <template #user-dropdown>
       <PersonalUserMenu @logout="handleLogout" />
     </template>
