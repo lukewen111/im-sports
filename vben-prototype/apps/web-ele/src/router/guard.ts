@@ -52,7 +52,14 @@ function setupAccessGuard(router: Router) {
     const userStore = useUserStore();
     const authStore = useAuthStore();
 
-    if (!prototypeAccess.canVisit(to.path)) return { path: prototypeAccess.home, replace: true };
+    if (!prototypeAccess.canVisit(to.path)) {
+      // 报告下两个子页面权限独立：仅有客服权限时，/reports 与 /reports/overview 都落到客服页
+      if (to.path.startsWith('/reports')) {
+        if (prototypeAccess.permissions.reports) return { path: '/reports/overview', replace: true };
+        if (prototypeAccess.permissions.reportsService) return { path: '/reports/service', replace: true };
+      }
+      return { path: prototypeAccess.home, replace: true };
+    }
     // 基本路由，这些路由不需要进入权限拦截
     if (coreRouteNames.includes(to.name as string)) {
       if (to.path === LOGIN_PATH && accessStore.accessToken) {
