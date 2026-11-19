@@ -140,6 +140,13 @@ const {
   sidebarExtraVisible,
 } = useExtraMenu(mixHeaderMenus);
 
+/** 带子菜单的一级菜单默认展开，进入应用即可看到「报告 → 概览」 */
+const defaultOpeneds = computed(() =>
+  sidebarMenus.value
+    .filter((menu) => menu.children?.length)
+    .map((menu) => menu.path),
+);
+
 /**
  * 包装菜单，翻译菜单名称
  * @param menus 原始菜单数据
@@ -349,6 +356,7 @@ const headerSlots = computed(() => {
         :collapse="preferences.sidebar.collapsed"
         :collapse-show-title="preferences.sidebar.collapsedShowTitle"
         :default-active="sidebarActive"
+        :default-openeds="defaultOpeneds"
         :menus="wrapperMenus(sidebarMenus)"
         :rounded="isMenuRounded"
         :theme="sidebarTheme"

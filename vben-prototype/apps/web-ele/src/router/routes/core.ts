@@ -121,6 +121,26 @@ const coreRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'Reports',
+        path: 'reports',
+        redirect: '/reports/overview',
+        meta: { icon: qicon('chart'), title: '报告' },
+        children: [
+          {
+            name: 'ReportOverview',
+            path: 'overview',
+            component: () => import('#/views/reports/overview/app.vue'),
+            meta: { icon: qicon('chart'), title: '概览' },
+          },
+          {
+            name: 'ReportService',
+            path: 'service',
+            component: () => import('#/views/reports/service/app.vue'),
+            meta: { icon: qicon('chart'), title: '客服' },
+          },
+        ],
+      },
+      {
         name: 'Settings',
         path: 'settings',
         redirect: '/settings/reception/auto-message',

@@ -14,6 +14,7 @@ import brandSafari from '../../assets/qingicon/brands/safari.svg?raw';
 import brandWindows from '../../assets/qingicon/brands/windows.svg?raw';
 import browser from '../../assets/qingicon/browser.svg?raw';
 import channel from '../../assets/qingicon/channel.svg?raw';
+import chart from '../../assets/qingicon/chart.svg?raw';
 import chat from '../../assets/qingicon/chat.svg?raw';
 import check from '../../assets/qingicon/check.svg?raw';
 import chevronDown from '../../assets/qingicon/chevron-down.svg?raw';
@@ -75,6 +76,7 @@ export const iconMap: Record<string, string> = {
   'brand-windows': brandWindows,
   'browser': browser,
   'channel': channel,
+  'chart': chart,
   'chat': chat,
   'check': check,
   'chevron-down': chevronDown,

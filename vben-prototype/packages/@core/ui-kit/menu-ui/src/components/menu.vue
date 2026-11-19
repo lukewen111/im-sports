@@ -232,6 +232,12 @@ function initMenu() {
     const subMenu = subMenus.value[path];
     subMenu && openMenu(path, subMenu.parentPaths);
   });
+
+  // 菜单数据加载完成后，同样展开默认展开的分组
+  props.defaultOpeneds?.forEach((path) => {
+    const subMenu = subMenus.value[path];
+    subMenu && openMenu(path, subMenu.parentPaths);
+  });
 }
 
 function updateActiveName(val: string) {
