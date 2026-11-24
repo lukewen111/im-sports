@@ -36,6 +36,7 @@ import file from '../../assets/qingicon/file.svg?raw';
 import filter from '../../assets/qingicon/filter.svg?raw';
 import image from '../../assets/qingicon/image.svg?raw';
 import mail from '../../assets/qingicon/mail.svg?raw';
+import megaphone from '../../assets/qingicon/megaphone.svg?raw';
 import messageCircleDots from '../../assets/qingicon/message-circle-dots.svg?raw';
 import messageCircleText from '../../assets/qingicon/message-circle-text.svg?raw';
 import messageCircle from '../../assets/qingicon/message-circle.svg?raw';
@@ -98,6 +99,7 @@ export const iconMap: Record<string, string> = {
   'filter': filter,
   'image': image,
   'mail': mail,
+  'megaphone': megaphone,
   'message-circle': messageCircle,
   'message-circle-dots': messageCircleDots,
   'message-circle-text': messageCircleText,

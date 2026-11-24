@@ -80,6 +80,10 @@ const matrix: PermGroup[] = [
       { key: 'reportsService', label: '客服', hint: '可查看客服会话量、首响与效率明细，团队筛选仅决定统计哪些成员，无数据范围。' },
     ],
   },
+  {
+    module: '活动',
+    items: [{ key: 'campaigns', label: '活动', hint: '可访问当前租户三种渠道类型的活动，完成创建、编辑、启停、立即运行、删除及运行历史查看，无数据范围。' }],
+  },
 ];
 
 const readonly = computed(() => Boolean(props.readonly || draft.value?.system));
@@ -87,8 +91,8 @@ const pageTitle = computed(() => (readonly.value ? '角色详情' : draft.value?
 const dirty = computed(() => Boolean(draft.value) && JSON.stringify(draft.value) !== baseline.value);
 const isMemberKind = computed(() => draft.value?.kind === 'member');
 
-// 角色类型即权限上限：普通成员不可持有团队三项、渠道管理、聊天与接待、报告
-const ADMIN_ONLY_KEYS: PermKey[] = ['teams', 'humans', 'ai', 'channels', 'settings', 'reports', 'reportsService'];
+// 角色类型即权限上限：普通成员不可持有团队三项、渠道管理、聊天与接待、报告、活动
+const ADMIN_ONLY_KEYS: PermKey[] = ['teams', 'humans', 'ai', 'channels', 'settings', 'reports', 'reportsService', 'campaigns'];
 function blockedByKind(item: PermItem) {
   return isMemberKind.value && ADMIN_ONLY_KEYS.includes(item.key);
 }
@@ -251,11 +255,11 @@ function validate() {
   if (!d.kind) errors.kind = '请选择角色类型';
 
   const p = d.permissions;
-  const hasPage = p.assigned !== 'none' || p.pending || p.customers !== 'none' || p.teams || p.humans || p.ai || p.channels || p.settings || p.reports || p.reportsService;
+  const hasPage = p.assigned !== 'none' || p.pending || p.customers !== 'none' || p.teams || p.humans || p.ai || p.channels || p.settings || p.reports || p.reportsService || p.campaigns;
   if (!hasPage) errors.pages = '请至少配置一项业务页面权限';
   if ((p.takeover && p.assigned === 'none') || (p.recall && (p.assigned === 'none' || p.customers === 'none'))) errors.permission = '权限依赖不完整，请重新配置';
 
-  if (d.kind === 'member' && (p.teams || p.humans || p.ai || p.channels || p.settings || p.reports || p.reportsService)) errors.permission = '普通成员类型不可授予团队、渠道管理、聊天与接待、报告权限';
+  if (d.kind === 'member' && (p.teams || p.humans || p.ai || p.channels || p.settings || p.reports || p.reportsService || p.campaigns)) errors.permission = '普通成员类型不可授予团队、渠道管理、聊天与接待、报告、活动权限';
 
   if (!errors.permission) {
     const c = access.permissions;
@@ -411,7 +415,7 @@ onBeforeRouteLeave(async () => {
 
         <p v-if="errors.pages" class="ui-form-error">{{ errors.pages }}</p>
         <p v-if="errors.permission" class="ui-form-error">{{ errors.permission }}</p>
-        <p v-if="!readonly && isMemberKind" class="ui-form-help">普通成员类型仅可配置聊天与客户权限；团队管理、人类成员、AI 成员、渠道管理、聊天与接待、报告由管理员类型角色持有，无法勾选。</p>
+        <p v-if="!readonly && isMemberKind" class="ui-form-help">普通成员类型仅可配置聊天与客户权限；团队管理、人类成员、AI 成员、渠道管理、聊天与接待、报告、活动由管理员类型角色持有，无法勾选。</p>
         <p v-if="!readonly && !access.isOwner" class="ui-form-help">灰显权限表示超出您当前可转授的范围，无法勾选。</p>
 
         <div v-if="conflict" class="conflict-notice" role="alert">

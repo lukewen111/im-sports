@@ -76,6 +76,7 @@ interface Result<T = undefined> {
 const KEY = 'im-support-vben:team-module-v3';
 const LEGACY_KEY = 'im-support-vben:team-module-v2';
 const TEAM_ID_KEY = 'im-support-vben:team-id-high-water';
+const CAMPAIGN_AI_SEED_KEY = 'im-support-vben:campaign-ai-member-seeded';
 const now = () => new Date().toISOString();
 const clone = <T>(value: T): T => structuredClone(toRaw(value));
 
@@ -92,6 +93,8 @@ const seedMembers: TeamMember[] = [
   { account: 'chenyi', enabled: true, id: 'member-chenyi', kind: 'human', name: '陈一', online: true, role: '客服', teamIds: ['100002'], timezone: 'UTC+08:00', version: 1 },
   { agentId: 'agent-sales', agentName: '售前助手', aiSource: 'adam', id: 'member-ai-sales', kind: 'ai', name: '小麦', online: true, role: 'AI 成员', teamIds: ['100002'], version: 1 },
   { agentId: 'agent-after-sales', agentName: '售后助手', aiSource: 'adam', exception: 'connection', id: 'member-ai-after-sales', kind: 'ai', name: '小橙', online: true, role: 'AI 成员', teamIds: ['100003'], version: 1 },
+  // 演示活动模块的 AI 发送者：通用团队补一名 AI 成员，保证三类渠道均可选到 AI 发送者
+  { agentId: 'agent-order', agentName: '订单查询助手', aiSource: 'adam', id: 'member-ai-general', kind: 'ai', name: '小星', online: true, role: 'AI 成员', teamIds: [DEFAULT_TEAM_ID], version: 1 },
 ];
 
 const agents: AgentOption[] = [
@@ -115,6 +118,12 @@ function load(): PersistedState {
     const saved = localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY);
     if (saved) {
       const parsed = JSON.parse(saved) as PersistedState;
+      if (!localStorage.getItem(CAMPAIGN_AI_SEED_KEY)) {
+        if (!parsed.members.some((member) => member.id === 'member-ai-general')) {
+          parsed.members.push(clone(seedMembers.find((member) => member.id === 'member-ai-general')!));
+        }
+        localStorage.setItem(CAMPAIGN_AI_SEED_KEY, '1');
+      }
       parsed.teams = parsed.teams.map((team) => {
         const id = normalizeTeamId(team.id);
         const { avatar: _legacyAvatar, ...teamWithoutAvatar } = team as TeamRecord & { avatar?: string };

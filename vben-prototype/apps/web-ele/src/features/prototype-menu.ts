@@ -23,6 +23,7 @@ export function buildPrototypeMenus(access: ReturnType<typeof usePrototypeAccess
           },
         ]
       : []),
+    ...(p.campaigns ? [{ icon: qicon('megaphone'), name: '活动', path: '/campaigns' }] : []),
     ...(p.settings ? [{ icon: qicon('settings'), name: '设置', path: '/settings/reception/auto-message' }] : []),
   ];
 }

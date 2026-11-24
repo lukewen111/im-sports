@@ -25,6 +25,7 @@ import './styles/ui-tags.css';
 import './styles/im-support.css';
 import './styles/channel-source-parity.css';
 import './styles/team-module.css';
+import './styles/campaigns.css';
 
 const avatarSource = `${import.meta.env.BASE_URL}im-support-logo.svg`;
 

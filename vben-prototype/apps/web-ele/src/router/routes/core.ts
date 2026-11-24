@@ -141,6 +141,32 @@ const coreRoutes: RouteRecordRaw[] = [
         ],
       },
       {
+        name: 'Campaigns',
+        path: 'campaigns',
+        redirect: '/campaigns/web-widget',
+        meta: { icon: qicon('megaphone'), title: '活动' },
+        children: [
+          {
+            name: 'CampaignByType',
+            path: ':type',
+            component: () => import('#/views/campaigns/app.vue'),
+            meta: { activePath: '/campaigns', hideInMenu: true, hideInTab: true, icon: qicon('megaphone'), title: '活动' },
+          },
+          {
+            name: 'CampaignCreate',
+            path: ':type/create',
+            component: () => import('#/views/campaigns/app.vue'),
+            meta: { activePath: '/campaigns', hideInMenu: true, hideInTab: true, title: '创建活动' },
+          },
+          {
+            name: 'CampaignEdit',
+            path: ':type/edit/:id',
+            component: () => import('#/views/campaigns/app.vue'),
+            meta: { activePath: '/campaigns', hideInMenu: true, hideInTab: true, title: '编辑活动' },
+          },
+        ],
+      },
+      {
         name: 'Settings',
         path: 'settings',
         redirect: '/settings/reception/auto-message',
