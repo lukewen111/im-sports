@@ -1,14 +1,14 @@
-import type { Channel, ChannelType } from '#/features/channels/channel-data';
+import type { Channel } from '#/features/channels/channel-data';
 import type { TeamMember } from '#/features/team/team-store';
-import type { Campaign, CampaignRun } from './campaign-data';
+import type { Campaign, CampaignRun, CampaignType } from './campaign-data';
 
 import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import { useChannelStore } from '#/features/channels/channel-store';
 import { useDemoServiceStore } from '#/features/service/demo-store';
 import { useTeamStore } from '#/features/team/team-store';
-import { CAMPAIGN_STORAGE_KEY } from './campaign-data';
-import { campaignInvalidReason, candidateCustomerCount, campaignStatus } from './campaign-rules';
+import { CAMPAIGN_STORAGE_KEY, SDK_CAMPAIGN_LIMIT } from './campaign-data';
+import { campaignInvalidReason, candidateCustomerCount, campaignStatus, memberUsable } from './campaign-rules';
 import { seedCampaigns, seedCampaignRuns } from './campaign-seed';
 
 export type CampaignInput = Omit<Campaign, 'createdAt' | 'expired' | 'id' | 'updatedAt'> & { expired?: boolean };
@@ -29,12 +29,26 @@ function load(): PersistedState {
     if (raw) {
       const parsed = JSON.parse(raw) as PersistedState;
       if (Array.isArray(parsed.campaigns) && Array.isArray(parsed.runs)) {
+        let changed = false;
+        // 旧演示数据迁移：单渠道 channelId 转为多渠道 channelIds
+        for (const campaign of parsed.campaigns) {
+          const legacy = campaign as Campaign & { channelId?: string };
+          if (!Array.isArray(legacy.channelIds)) {
+            legacy.channelIds = legacy.channelId ? [legacy.channelId] : [];
+            changed = true;
+          }
+          if (legacy.channelId !== undefined) {
+            delete legacy.channelId;
+            changed = true;
+          }
+        }
         // 旧演示数据修正：「运行中」但缺少 startedAt 的记录转为错过计划的失败记录
         const staleRun = parsed.runs.find((run) => run.id === 'run-telegram-4' && run.status === 'running' && !run.startedAt);
         if (staleRun) {
           Object.assign(staleRun, { durationSec: 0, plannedAt: '2026-11-20T12:00:00.000Z', startedAt: undefined, status: 'failed' });
-          localStorage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(parsed));
+          changed = true;
         }
+        if (changed) localStorage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(parsed));
         return parsed;
       }
     }
@@ -72,16 +86,15 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
   const senderOf = (id: string): TeamMember | undefined => teamStore.members.find((member) => member.id === id);
 
   function invalidReasonFor(campaign: Campaign): string | undefined {
-    const channel = channelOf(campaign.channelId);
-    const teamExists = Boolean(channel?.teamId && teamStore.teams.some((team) => team.id === channel.teamId));
-    return campaignInvalidReason(campaign, channel, senderOf(campaign.senderId), teamExists);
+    const channels = campaign.channelIds.map((id) => channelOf(id));
+    return campaignInvalidReason(campaign, channels, senderOf(campaign.senderId));
   }
 
-  function campaignsOf(type: ChannelType) {
+  function campaignsOf(type: CampaignType) {
     return campaigns.value.filter((campaign) => campaign.type === type);
   }
 
-  function runsOf(type: ChannelType) {
+  function runsOf(type: CampaignType) {
     return runs.value.filter((run) => run.type === type);
   }
 
@@ -89,18 +102,21 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     return runs.value.some((run) => run.campaignId === campaignId && run.status === 'running' && run.startedAt);
   }
 
-  function channelOptions(type: ChannelType) {
+  function channelOptions(type: CampaignType) {
+    if (type === 'sdk') return [];
     return channelStore.channels.filter((channel) => channel.type === type && channel.enabled);
   }
 
-  function senderOptions(channelId: string) {
-    const channel = channelOf(channelId);
-    if (!channel?.teamId) return [];
-    return teamStore.membersOf(channel.teamId).filter((member) => (member.kind === 'ai' ? member.exception !== 'agent' : member.enabled !== false));
+  /** 发送者候选：租户内全部已启用成员，与渠道及接待团队无关 */
+  function senderOptions() {
+    return teamStore.members.filter((member) => memberUsable(member));
   }
+
+  const sdkCampaignCount = computed(() => campaigns.value.filter((campaign) => campaign.type === 'sdk').length);
 
   function create(input: CampaignInput): Result<Campaign> {
     const name = input.name.trim();
+    if (input.type === 'sdk' && sdkCampaignCount.value >= SDK_CAMPAIGN_LIMIT) return { error: 'SDK 最多创建 1 个活动' };
     if (campaigns.value.some((campaign) => campaign.type === input.type && campaign.name === name)) return { error: '同一渠道类型下活动名称不可重复' };
     const campaign: Campaign = {
       ...input,
@@ -117,6 +133,7 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
   function update(id: string, input: CampaignInput): Result<Campaign> {
     const campaign = campaigns.value.find((item) => item.id === id);
     if (!campaign) return { error: '活动不存在或已被删除' };
+    if (input.type !== campaign.type) return { error: '活动所属渠道类型不可变更' };
     const name = input.name.trim();
     if (campaigns.value.some((item) => item.type === campaign.type && item.id !== id && item.name === name)) return { error: '同一渠道类型下活动名称不可重复' };
     const wasExpired = campaignStatus(campaign) === 'expired';
@@ -147,6 +164,9 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     return {};
   }
 
+  /** SDK 无真实渠道客户，用固定客户数演示运行统计 */
+  const SDK_DEMO_CUSTOMERS = 3;
+
   function runNow(id: string): Result<CampaignRun> {
     const campaign = campaigns.value.find((item) => item.id === id);
     if (!campaign) return { error: '活动不存在或已被删除' };
@@ -154,7 +174,7 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     if (invalidReasonFor(campaign)) return { error: '活动配置已失效，请修正后重试' };
     if (isRunning(id)) return { error: '活动正在运行中，请稍后再试' };
 
-    const targets = candidateCustomerCount(demoStore.sessions, campaign.channelId);
+    const targets = campaign.type === 'sdk' ? SDK_DEMO_CUSTOMERS : candidateCustomerCount(demoStore.sessions, campaign.channelIds);
     // 运行开始后编辑活动只影响后续运行，因此消息规模在启动时固定
     const messagesPerCustomer = campaign.imageUrl ? 2 : 1;
     const run: CampaignRun = {
@@ -239,6 +259,7 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     remove,
     runNow,
     runsOf,
+    sdkCampaignCount,
     senderOf,
     senderOptions,
     toggle,

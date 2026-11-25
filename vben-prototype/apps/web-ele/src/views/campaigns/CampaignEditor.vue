@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { ChannelType } from '#/features/channels/channel-data';
-import type { CampaignRepeat } from '#/features/campaigns/campaign-data';
+import type { CampaignRepeat, CampaignType } from '#/features/campaigns/campaign-data';
 import type { CampaignInput } from '#/features/campaigns/campaign-store';
 
 import { computed, reactive, ref, watch } from 'vue';
@@ -14,7 +13,7 @@ import { useCampaignStore } from '#/features/campaigns/campaign-store';
 import { usePrototypeAccess } from '#/features/team/access-store';
 import ChannelGlyph from '#/views/channels/ChannelGlyph.vue';
 
-const props = defineProps<{ type: ChannelType; campaignId?: string }>();
+const props = defineProps<{ type: CampaignType; campaignId?: string }>();
 const emit = defineEmits<{ cancel: []; saved: [] }>();
 
 const store = useCampaignStore();
@@ -33,7 +32,7 @@ interface Draft {
   text: string;
   imageUrl?: string;
   imageName?: string;
-  channelId: string;
+  channelIds: string[];
   senderId: string;
   repeat: CampaignRepeat;
   date: string;
@@ -49,7 +48,7 @@ const draft = reactive<Draft>({
   text: '',
   imageUrl: undefined,
   imageName: undefined,
-  channelId: '',
+  channelIds: [],
   senderId: '',
   repeat: 'once',
   date: defaultOnceDate(),
@@ -66,14 +65,30 @@ const saving = ref(false);
 /** 与聊天侧一致的可见字符计数（emoji、组合字符按 1 个计） */
 const textLength = computed(() => countVisibleCharacters(draft.text));
 
+const isSdk = computed(() => props.type === 'sdk');
 const channelOptions = computed(() => store.channelOptions(props.type));
-const selectedChannel = computed(() => channelOptions.value.find((channel) => channel.id === draft.channelId));
-const senderOptions = computed(() => (draft.channelId ? store.senderOptions(draft.channelId) : []));
-const currentChannel = computed(() => store.channelOf(draft.channelId));
-const channelUnavailable = computed(() => Boolean(draft.channelId) && (!currentChannel.value || !currentChannel.value.enabled));
+const selectedChannels = computed(() => draft.channelIds.map((id) => store.channelOf(id)));
+/** 已选但当前不可用的渠道（停用或删除），仅用于展示禁用标签 */
+const invalidChannels = computed(() =>
+  draft.channelIds
+    .map((id, index) => ({ channel: selectedChannels.value[index], id }))
+    .filter((item) => !item.channel || !item.channel.enabled),
+);
+/** 已选渠道的失效数量，提示只报个数不点名 */
+const channelProblem = computed(() => {
+  const disabled = selectedChannels.value.filter((channel) => channel && !channel.enabled).length;
+  const missing = selectedChannels.value.filter((channel) => !channel).length;
+  if (!disabled && !missing) return '';
+  const parts: string[] = [];
+  if (disabled) parts.push(`${disabled} 个已停用`);
+  if (missing) parts.push(`${missing} 个已删除`);
+  return `所选渠道中有 ${parts.join('、')}`;
+});
+const senderOptions = computed(() => store.senderOptions());
 const senderUnavailable = computed(() => Boolean(draft.senderId) && !senderOptions.value.some((member) => member.id === draft.senderId));
-const channelFieldError = computed(() => (channelUnavailable.value ? '当前渠道已停用，请重新选择渠道' : errors.channel));
+const channelFieldError = computed(() => (channelProblem.value ? `${channelProblem.value}，请重新选择` : errors.channel));
 const senderFieldError = computed(() => (senderUnavailable.value ? '当前发送者已失效，请重新选择' : errors.sender));
+const sdkLimitReached = computed(() => props.type === 'sdk' && !props.campaignId && store.sdkCampaignCount >= 1);
 
 function resetErrors() {
   Object.assign(errors, { name: '', message: '', channel: '', sender: '', date: '', days: '', time: '', timezone: '' });
@@ -95,7 +110,7 @@ function loadSource() {
     text: campaign.text,
     imageUrl: campaign.imageUrl,
     imageName: campaign.imageName,
-    channelId: campaign.channelId,
+    channelIds: [...campaign.channelIds],
     senderId: campaign.senderId,
     repeat: campaign.repeat,
     date: campaign.date || defaultOnceDate(),
@@ -109,17 +124,6 @@ function loadSource() {
 
 loadSource();
 watch(() => [props.campaignId, props.type], loadSource);
-
-watch(
-  () => draft.channelId,
-  (channelId) => {
-    if (!channelId) {
-      draft.senderId = '';
-      return;
-    }
-    if (!senderOptions.value.some((member) => member.id === draft.senderId)) draft.senderId = '';
-  },
-);
 
 function toggleNumber(list: number[], value: number) {
   const index = list.indexOf(value);
@@ -200,12 +204,12 @@ function validate() {
   if (!draft.name.trim()) errors.name = '请输入活动名称';
   if (textLength.value > CAMPAIGN_TEXT_MAX_LENGTH) errors.message = `消息不能超过 ${CAMPAIGN_TEXT_MAX_LENGTH} 字`;
   else if (!draft.text.trim() && !draft.imageUrl) errors.message = '消息与图片至少填写一项';
-  if (!draft.channelId) errors.channel = '请选择渠道';
-  else if (channelUnavailable.value) errors.channel = '当前渠道已停用，请重新选择渠道';
-  if (draft.channelId) {
-    if (!draft.senderId) errors.sender = '请选择发送者';
-    else if (senderUnavailable.value) errors.sender = '当前发送者已失效，请重新选择';
+  if (!isSdk.value) {
+    if (draft.channelIds.length === 0) errors.channel = '请选择渠道';
+    else if (channelProblem.value) errors.channel = `${channelProblem.value}，请重新选择`;
   }
+  if (!draft.senderId) errors.sender = '请选择发送者';
+  else if (senderUnavailable.value) errors.sender = '当前发送者已失效，请重新选择';
   if (!draft.time) errors.time = '请选择发送时间';
   if (!draft.timezone) errors.timezone = '请选择时区';
   if (draft.repeat === 'once') {
@@ -225,6 +229,10 @@ function save() {
     ElMessage.warning('活动不存在或已被删除');
     return;
   }
+  if (sdkLimitReached.value) {
+    ElMessage.warning('SDK 最多创建 1 个活动');
+    return;
+  }
   if (!access.canVisit('/campaigns')) {
     ElMessage.warning('活动权限已被收回，无法保存');
     void router.replace(access.home);
@@ -238,7 +246,7 @@ function save() {
     text: draft.text.trim(),
     imageUrl: draft.imageUrl,
     imageName: draft.imageName,
-    channelId: draft.channelId,
+    channelIds: isSdk.value ? [] : [...draft.channelIds],
     senderId: draft.senderId,
     repeat: draft.repeat,
     date: draft.repeat === 'once' ? draft.date : undefined,
@@ -266,6 +274,14 @@ function save() {
       <div class="ui-empty">
         <strong>活动不存在或已被删除</strong>
         <span>请返回活动列表后重试。</span>
+        <ElButton class="ui-btn-outline" @click="emit('cancel')">返回活动列表</ElButton>
+      </div>
+    </div>
+
+    <div v-else-if="sdkLimitReached" class="campaigns-scroll">
+      <div class="ui-empty">
+        <strong>SDK 最多创建 1 个活动</strong>
+        <span>请先删除已有的 SDK 活动后再创建。</span>
         <ElButton class="ui-btn-outline" @click="emit('cancel')">返回活动列表</ElButton>
       </div>
     </div>
@@ -323,31 +339,30 @@ function save() {
 
           <section class="campaign-section">
             <h2 class="campaign-section-title">发送设置</h2>
-            <div class="campaign-form-row">
-              <ElFormItem label="选择渠道" required :error="channelFieldError">
-                <ElSelect v-model="draft.channelId" placeholder="请选择渠道" popper-class="campaign-channel-select-popper">
-                  <ElOption v-if="channelUnavailable" :label="currentChannel?.name || '已失效的渠道'" :value="draft.channelId" disabled />
+            <div class="campaign-form-row" :class="{ 'is-single': isSdk }">
+              <ElFormItem v-if="!isSdk" label="选择渠道" required :error="channelFieldError">
+                <ElSelect
+                  v-model="draft.channelIds"
+                  multiple
+                  placeholder="请选择渠道"
+                  popper-class="campaign-channel-select-popper"
+                >
+                  <ElOption v-for="item in invalidChannels" :key="`invalid-${item.id}`" :label="item.channel?.name || '已删除的渠道'" :value="item.id" disabled />
                   <ElOption v-for="channel in channelOptions" :key="channel.id" :label="channel.name" :value="channel.id">
                     <span class="campaign-channel-option">
                       <ChannelGlyph :type="channel.type" :size="18" />
                       <span class="campaign-channel-option-name">{{ channel.name }}</span>
                     </span>
                   </ElOption>
-                  <template #label="{ label }">
-                    <span class="campaign-channel-option">
-                      <ChannelGlyph v-if="selectedChannel" :type="selectedChannel.type" :size="18" />
-                      <span class="campaign-channel-option-name">{{ label }}</span>
-                    </span>
-                  </template>
                 </ElSelect>
                 <p v-if="channelOptions.length === 0" class="campaign-field-hint">当前渠道类型下暂无已启用渠道，请先在渠道管理中启用。</p>
               </ElFormItem>
-              <ElFormItem v-if="draft.channelId" label="发送者" required :error="senderFieldError">
-                <ElSelect v-model="draft.senderId" :disabled="!draft.channelId" placeholder="请选择发送者">
+              <ElFormItem label="发送者" required :error="senderFieldError">
+                <ElSelect v-model="draft.senderId" placeholder="请选择发送者">
                   <ElOption v-if="senderUnavailable" label="已失效的发送者" :value="draft.senderId" disabled />
                   <ElOption v-for="member in senderOptions" :key="member.id" :label="member.kind === 'ai' ? `${member.name}（AI 成员）` : member.name" :value="member.id" />
                 </ElSelect>
-                <p v-if="draft.channelId && senderOptions.length === 0" class="campaign-field-hint">该渠道接待团队暂无可用成员。</p>
+                <p v-if="senderOptions.length === 0" class="campaign-field-hint">暂无已启用的成员。</p>
               </ElFormItem>
             </div>
           </section>

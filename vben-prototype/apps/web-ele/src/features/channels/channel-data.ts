@@ -38,12 +38,24 @@ const defaults = (type: ChannelType, id: string): Omit<Channel, 'createdAt' | 'i
   widgetDesktopVisible: true, widgetIcon: 'message', widgetMobileOffsetX: 24, widgetMobileOffsetY: 24,
   widgetMobilePosition: 'bottom-right', widgetMobileVisible: true, widgetOffsetX: 24, widgetOffsetY: 24, widgetPosition: 'bottom-right',
 });
+const extraSeedChannels: Channel[] = [
+  { ...defaults('telegram', 'channel-telegram-sales'), botToken: '223456789:mock_telegram_sales_bot', createdAt: '2026-10-18T11:05:00.000Z', id: 'channel-telegram-sales', name: 'TG 售前咨询', teamId: '100002', telegramBotId: '223456789', type: 'telegram', updatedAt: now() },
+  { ...defaults('telegram', 'channel-telegram-support'), botToken: '323456789:mock_telegram_support_bot', createdAt: '2026-10-17T09:40:00.000Z', id: 'channel-telegram-support', name: 'TG 官网客服', teamId: DEFAULT_TEAM_ID, telegramBotId: '323456789', type: 'telegram', updatedAt: now() },
+  { ...defaults('telegram', 'channel-telegram-campaign'), botToken: '423456789:mock_telegram_campaign_bot', createdAt: '2026-10-16T16:22:00.000Z', id: 'channel-telegram-campaign', name: 'TG 活动通知', teamId: '100003', telegramBotId: '423456789', type: 'telegram', updatedAt: now() },
+  { ...defaults('telegram', 'channel-telegram-global'), botToken: '523456789:mock_telegram_global_bot', createdAt: '2026-10-15T08:12:00.000Z', id: 'channel-telegram-global', name: 'TG 海外支持', teamId: '100002', telegramBotId: '523456789', type: 'telegram', updatedAt: now() },
+  { ...defaults('chat-page', 'channel-chat-page-sales'), brandSignature: '售前咨询在线', chatPageUrl: '/chat/100002', createdAt: '2026-10-18T10:20:00.000Z', id: 'channel-chat-page-sales', name: '售前咨询聊天页', teamId: '100002', type: 'chat-page', updatedAt: now() },
+  { ...defaults('chat-page', 'channel-chat-page-after-sales'), brandSignature: '售后服务在线', chatPageUrl: '/chat/100003', createdAt: '2026-10-17T14:36:00.000Z', id: 'channel-chat-page-after-sales', name: '售后支持聊天页', teamId: '100003', type: 'chat-page', updatedAt: now() },
+  { ...defaults('chat-page', 'channel-chat-page-member'), brandSignature: '会员服务在线', chatPageUrl: `/chat/${DEFAULT_TEAM_ID}`, createdAt: '2026-10-16T11:48:00.000Z', id: 'channel-chat-page-member', name: '会员服务聊天页', teamId: DEFAULT_TEAM_ID, type: 'chat-page', updatedAt: now() },
+  { ...defaults('chat-page', 'channel-chat-page-campaign'), brandSignature: '活动咨询在线', chatPageUrl: '/chat/100002', createdAt: '2026-10-15T17:05:00.000Z', id: 'channel-chat-page-campaign', name: '活动咨询聊天页', teamId: '100002', type: 'chat-page', updatedAt: now() },
+];
 const seedChannels: Channel[] = [
   { ...defaults('web-widget', 'channel-web-widget-main'), createdAt: '2026-10-21T10:30:00.000Z', id: 'channel-web-widget-main', installCheckedAt: '2026-10-21T10:12:00.000Z', installStatus: 'success', name: '官网网站小部件', type: 'web-widget', updatedAt: now(), websiteDomain: 'support.example.com', widgetMobileOffsetX: 16, widgetMobileOffsetY: 16 },
   { ...defaults('telegram', 'channel-telegram-payment'), botToken: '123456789:mock_telegram_payment_bot', createdAt: '2026-10-20T15:18:00.000Z', id: 'channel-telegram-payment', name: 'TG 充值渠道', teamId: '100002', telegramBotId: '123456789', type: 'telegram', updatedAt: now() },
   { ...defaults('chat-page', 'channel-chat-page-support'), brandSignature: '在线客户服务', chatPageUrl: `/chat/${DEFAULT_TEAM_ID}`, createdAt: '2026-10-19T09:42:00.000Z', id: 'channel-chat-page-support', name: '客户服务聊天页面', type: 'chat-page', updatedAt: now() },
+  ...extraSeedChannels,
 ];
 export const STORAGE_KEY = 'im-support-vben:channels-v4';
+const EXTRA_SEED_KEY = 'im-support-vben:channels-extra-seeded-v1';
 
 export function normalizeChannel(input: Partial<Channel> & { id: string; name: string; type: ChannelType }): Channel {
   const base = defaults(input.type, input.id);
@@ -57,6 +69,13 @@ export function loadChannels(): Channel[] {
     const value = localStorage.getItem(STORAGE_KEY);
     if (value) {
       const channels = (JSON.parse(value) as Channel[]).map((item) => normalizeChannel(item));
+      if (!localStorage.getItem(EXTRA_SEED_KEY)) {
+        const ids = new Set(channels.map((channel) => channel.id));
+        extraSeedChannels.forEach((channel) => {
+          if (!ids.has(channel.id)) channels.push(structuredClone(channel));
+        });
+        localStorage.setItem(EXTRA_SEED_KEY, '1');
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(channels));
       return channels;
     }

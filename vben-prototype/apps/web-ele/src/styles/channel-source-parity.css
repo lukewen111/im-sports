@@ -95,6 +95,8 @@
 .channels-page .channels-subnav :is(.channel-glyph) {
   width: 24px;
   height: 24px;
+  background: transparent;
+  border: 0;
   border-radius: var(--ui-radius-control);
 }
 

@@ -7,7 +7,7 @@ import QIcon from '#/components/q-icon/QIcon.vue';
 
 const props = defineProps<{
   size?: number;
-  type: ChannelType;
+  type: ChannelType | 'sdk';
 }>();
 
 const iconSize = computed(() => (props.size ? Math.round(props.size * (22 / 36)) : 22));
@@ -27,6 +27,7 @@ const glyphStyle = computed(() => props.size
     <svg v-else-if="type === 'telegram'" class="telegram-brand-icon" viewBox="0 0 24 24" aria-hidden="true" :style="{ width: `${iconSize}px`, height: `${iconSize}px` }">
       <path d="M21.8 4.1 18.5 20c-.2 1.1-.9 1.4-1.8.9l-5-3.7-2.4 2.3c-.3.3-.5.5-1 .5l.4-5.1L18 6.5c.4-.4-.1-.6-.6-.2L6 13.4l-4.9-1.5c-1.1-.3-1.1-1.1.2-1.6L20.5 3c.9-.3 1.6.2 1.3 1.1Z" />
     </svg>
+    <QIcon v-else-if="type === 'sdk'" name="code" :size="iconSize" />
     <QIcon v-else name="chat" :size="iconSize" />
   </span>
 </template>
@@ -40,8 +41,8 @@ const glyphStyle = computed(() => props.size
   place-items: center;
   overflow: hidden;
   color: #131317;
-  background: transparent;
-  border: 0;
+  background: #f5f5f5;
+  border: 1px solid #ececed;
   border-radius: 10px;
 }
 

@@ -43,13 +43,21 @@ export function memberUsable(member: TeamMember): boolean {
   return member.enabled !== false;
 }
 
-/** 配置失效原因，用于活动卡片提示与保存校验 */
-export function campaignInvalidReason(_campaign: Campaign, channel: Channel | undefined, sender: TeamMember | undefined, teamExists: boolean): string | undefined {
-  if (!channel) return '渠道已删除';
-  if (!channel.enabled) return '渠道已停用';
-  if (!teamExists) return '接待团队已失效';
-  if (!sender || !channel.teamId || !sender.teamIds.includes(channel.teamId)) return '发送者已失效';
-  return memberUsable(sender) ? undefined : '发送者已失效';
+/** 配置失效原因，用于活动卡片提示与保存校验；渠道问题只报数量，不点名 */
+export function campaignInvalidReason(campaign: Campaign, channels: Array<Channel | undefined>, sender: TeamMember | undefined): string | undefined {
+  if (campaign.type !== 'sdk') {
+    if (channels.length === 0) return '未选择渠道';
+    const disabled = channels.filter((channel) => channel && !channel.enabled).length;
+    const missing = channels.filter((channel) => !channel).length;
+    if (disabled || missing) {
+      const parts: string[] = [];
+      if (disabled) parts.push(`${disabled} 个已停用`);
+      if (missing) parts.push(`${missing} 个已删除`);
+      return `所选渠道中有 ${parts.join('、')}`;
+    }
+  }
+  if (!sender || !memberUsable(sender)) return '发送者已失效';
+  return undefined;
 }
 
 /** 耗时展示：0s / 20m21s / 1h10m10s，超过 24 小时继续累计小时 */
@@ -136,11 +144,36 @@ export function sortRuns(runs: CampaignRun[]): CampaignRun[] {
   return [...runs].sort((a, b) => stamp(b) - stamp(a));
 }
 
-/** 发送对象：该渠道实例下曾建立正式会话、且当前没有任何未结束会话的客户，按客户 ID 去重 */
-export function candidateCustomerCount(sessions: Array<{ channelId: string; customerId: string; status: string }>, channelId: string): number {
-  const channelCustomerIds = new Set(sessions.filter((session) => session.channelId === channelId).map((session) => session.customerId));
+export interface CampaignTarget {
+  customerId: string;
+  /** 该客户最近一次已结束会话所在的所选渠道 */
+  channelId: string;
+}
+
+/** 发送对象：所选渠道中曾建立正式会话、且当前没有任何未结束会话的客户，按客户 ID 去重并各选一条发送渠道 */
+export function candidateCustomers(
+  sessions: Array<{ channelId: string; createdAt?: string; customerId: string; endedAt?: string; status: string }>,
+  channelIds: string[],
+): CampaignTarget[] {
   const busyCustomerIds = new Set(sessions.filter((session) => session.status !== 'ended').map((session) => session.customerId));
-  return [...channelCustomerIds].filter((id) => !busyCustomerIds.has(id)).length;
+  const latest = new Map<string, { channelId: string; stamp: number }>();
+  for (const session of sessions) {
+    if (session.status !== 'ended' || !channelIds.includes(session.channelId)) continue;
+    const stamp = new Date(session.endedAt || session.createdAt || 0).getTime();
+    const previous = latest.get(session.customerId);
+    if (!previous || stamp >= previous.stamp) latest.set(session.customerId, { channelId: session.channelId, stamp });
+  }
+  return [...latest.entries()]
+    .filter(([customerId]) => !busyCustomerIds.has(customerId))
+    .map(([customerId, item]) => ({ customerId, channelId: item.channelId }));
+}
+
+/** 候选发送客户数：多个所选渠道取并集后按客户去重 */
+export function candidateCustomerCount(
+  sessions: Array<{ channelId: string; createdAt?: string; customerId: string; endedAt?: string; status: string }>,
+  channelIds: string[],
+): number {
+  return candidateCustomers(sessions, channelIds).length;
 }
 
 /** 由当前时间生成单次活动默认日期（次日） */

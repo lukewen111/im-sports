@@ -1,19 +1,36 @@
 import type { ChannelType } from '#/features/channels/channel-data';
 
+import { channelTypes } from '#/features/channels/channel-data';
+
 export type CampaignRepeat = 'daily' | 'monthly' | 'once' | 'weekly';
 export type CampaignStatus = 'active' | 'expired' | 'paused';
 export type CampaignRunStatus = 'failed' | 'running' | 'success';
+/** 活动渠道类型：在渠道类型基础上增加无渠道实例的 SDK */
+export type CampaignType = ChannelType | 'sdk';
+
+export const campaignTypes: CampaignType[] = [...channelTypes, 'sdk'];
+
+export const campaignTypeLabels: Record<CampaignType, string> = {
+  'chat-page': '聊天页面',
+  sdk: 'SDK',
+  telegram: 'Telegram',
+  'web-widget': '网站小部件',
+};
+
+/** SDK 渠道最多可创建的活动数（全租户） */
+export const SDK_CAMPAIGN_LIMIT = 1;
 
 export interface Campaign {
-  /** 所属渠道类型，三个入口数据完全独立 */
-  type: ChannelType;
+  /** 所属渠道类型，四个入口数据完全独立 */
+  type: CampaignType;
   id: string;
   name: string;
   /** 文本消息，可为空（与图片至少一项） */
   text: string;
   imageUrl?: string;
   imageName?: string;
-  channelId: string;
+  /** 所选渠道实例，可多选；SDK 活动为空数组 */
+  channelIds: string[];
   senderId: string;
   repeat: CampaignRepeat;
   /** 单次活动的计划日期 YYYY-MM-DD */
@@ -36,7 +53,7 @@ export interface Campaign {
 export interface CampaignRun {
   id: string;
   campaignId: string;
-  type: ChannelType;
+  type: CampaignType;
   /** 活动名称快照，活动删除后仍可追溯 */
   snapshotName: string;
   status: CampaignRunStatus;

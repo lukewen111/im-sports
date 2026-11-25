@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { ChannelType } from '#/features/channels/channel-data';
-import type { CampaignRun } from '#/features/campaigns/campaign-data';
+import type { CampaignRun, CampaignType } from '#/features/campaigns/campaign-data';
 
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
@@ -9,7 +8,7 @@ import { useCampaignStore } from '#/features/campaigns/campaign-store';
 import { formatCount, runDurationText, runStatusText, runTimeText, sortRuns } from '#/features/campaigns/campaign-rules';
 import { usePrototypeAccess } from '#/features/team/access-store';
 
-const props = defineProps<{ type: ChannelType }>();
+const props = defineProps<{ type: CampaignType }>();
 const store = useCampaignStore();
 const access = usePrototypeAccess();
 const route = useRoute();

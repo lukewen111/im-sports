@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { ChannelType } from '#/features/channels/channel-data';
-import type { Campaign, CampaignStatus } from '#/features/campaigns/campaign-data';
+import type { Campaign, CampaignStatus, CampaignType } from '#/features/campaigns/campaign-data';
 
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -10,7 +9,7 @@ import { campaignStatus } from '#/features/campaigns/campaign-rules';
 import { usePrototypeAccess } from '#/features/team/access-store';
 import CampaignCard from './CampaignCard.vue';
 
-const props = defineProps<{ type: ChannelType }>();
+const props = defineProps<{ type: CampaignType }>();
 const emit = defineEmits<{ create: []; 'open-history': [] }>();
 
 const store = useCampaignStore();
