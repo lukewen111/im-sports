@@ -104,7 +104,6 @@ const notificationSiteName = computed(() => {
     return 'support.example.com';
   }
 });
-const notificationTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
 /** 通知正文由消息文本派生，纯图片消息为空 */
 const notificationBodyText = computed(() => notificationBody(draft.text));
 /** 预计目标客户数；未选渠道时不统计，展示为 — */
@@ -414,44 +413,54 @@ function save() {
           <section v-if="web" class="campaign-section">
             <h2 class="campaign-section-title">浏览器通知</h2>
 
-            <ElFormItem label="通知标题" required :error="errors.notificationTitle">
-              <ElInput v-model="draft.notificationTitle" placeholder="请输入通知标题" @input="onNotificationTitleInput" />
-              <div class="campaign-message-meta is-end">
-                <span class="campaign-message-count" :class="{ 'is-over': notificationTitleLength > CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH }">
-                  已输入 {{ notificationTitleLength }} / {{ CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH }}
-                </span>
-              </div>
-            </ElFormItem>
-
-            <ElFormItem label="跳转链接" :error="draft.notificationLinkMode === 'custom' ? errors.notificationUrl : ''">
-              <ElRadioGroup v-model="draft.notificationLinkMode">
-                <ElRadio value="channel">渠道对应网址</ElRadio>
-                <ElRadio value="custom">自定义 URL</ElRadio>
-              </ElRadioGroup>
-              <ElInput v-if="draft.notificationLinkMode === 'custom'" v-model="draft.notificationCustomUrl" placeholder="https://example.com/activity" />
-            </ElFormItem>
-
-            <ElFormItem label="通知预览">
-              <div class="campaign-chrome-notification">
-                <div class="campaign-chrome-notification-head">
-                  <span class="campaign-chrome-notification-origin">{{ notificationSiteName }}</span>
-                  <span class="campaign-chrome-notification-time">{{ notificationTime }}</span>
-                  <button class="campaign-chrome-notification-close" type="button" tabindex="-1" aria-label="关闭">×</button>
-                </div>
-                <div class="campaign-chrome-notification-main">
-                  <div class="campaign-chrome-notification-icon">
-                    <img v-if="previewChannel?.brandAvatar" :src="previewChannel.brandAvatar" alt="" />
-                    <ChannelGlyph v-else :type="previewChannel?.type || type" :size="18" />
+            <div class="campaign-notification-layout">
+              <div class="campaign-notification-fields">
+                <ElFormItem label="通知标题" required :error="errors.notificationTitle">
+                  <ElInput v-model="draft.notificationTitle" placeholder="请输入通知标题" @input="onNotificationTitleInput" />
+                  <div class="campaign-message-meta is-end">
+                    <span class="campaign-message-count" :class="{ 'is-over': notificationTitleLength > CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH }">
+                      已输入 {{ notificationTitleLength }} / {{ CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH }}
+                    </span>
                   </div>
-                  <div class="campaign-chrome-notification-copy">
-                    <strong>{{ draft.notificationTitle.trim() || '通知标题' }}</strong>
-                    <p v-if="notificationBodyText">{{ notificationBodyText }}</p>
-                  </div>
-                </div>
-                <img v-if="draft.imageUrl" class="campaign-chrome-notification-image" :src="draft.imageUrl" alt="" />
+                </ElFormItem>
+
+                <ElFormItem label="跳转链接" :error="draft.notificationLinkMode === 'custom' ? errors.notificationUrl : ''">
+                  <ElRadioGroup v-model="draft.notificationLinkMode">
+                    <ElRadio value="channel">渠道对应网址</ElRadio>
+                    <ElRadio value="custom">自定义 URL</ElRadio>
+                  </ElRadioGroup>
+                  <ElInput v-if="draft.notificationLinkMode === 'custom'" v-model="draft.notificationCustomUrl" placeholder="https://example.com/activity" />
+                </ElFormItem>
               </div>
-              <p v-if="multiChannel" class="campaign-field-hint">以实际发送渠道为准</p>
-            </ElFormItem>
+
+              <ElFormItem class="campaign-notification-preview" label="通知预览">
+                <div class="campaign-chrome-notification">
+                  <div class="campaign-chrome-notification-head">
+                    <span class="campaign-chrome-notification-browser">
+                      <span class="campaign-chrome-notification-browser-icon" aria-hidden="true"></span>
+                      Google Chrome
+                    </span>
+                    <span class="campaign-chrome-notification-actions">
+                      <span class="campaign-chrome-notification-more" aria-hidden="true">⋯</span>
+                      <button class="campaign-chrome-notification-close" type="button" tabindex="-1" aria-label="关闭">×</button>
+                    </span>
+                  </div>
+                  <div class="campaign-chrome-notification-main">
+                    <div class="campaign-chrome-notification-icon">
+                      <img v-if="previewChannel?.brandAvatar" :src="previewChannel.brandAvatar" alt="" />
+                      <ChannelGlyph v-else :type="previewChannel?.type || type" :size="26" />
+                    </div>
+                    <div class="campaign-chrome-notification-copy">
+                      <strong>{{ draft.notificationTitle.trim() || '通知标题' }}</strong>
+                      <p v-if="notificationBodyText">{{ notificationBodyText }}</p>
+                      <span class="campaign-chrome-notification-site">{{ notificationSiteName }}</span>
+                    </div>
+                  </div>
+                  <img v-if="draft.imageUrl" class="campaign-chrome-notification-image" :src="draft.imageUrl" alt="" />
+                </div>
+                <p v-if="multiChannel" class="campaign-field-hint">以实际发送渠道为准</p>
+              </ElFormItem>
+            </div>
           </section>
 
           <section class="campaign-section">

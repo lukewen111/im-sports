@@ -817,41 +817,96 @@
   justify-content: flex-end;
 }
 
+/* 浏览器通知：字段在左、预览在右，窄屏自动上下排列 */
+.campaigns-page .campaign-notification-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 32px;
+  align-items: start;
+}
+
+.campaigns-page .campaign-notification-fields {
+  min-width: 0;
+}
+
+.campaigns-page .campaign-notification-preview {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .campaigns-page .campaign-notification-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
 .campaigns-page .campaign-chrome-notification {
   width: 100%;
-  max-width: 380px;
-  padding: 10px 12px 12px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-line-strong);
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgb(15 18 24 / 8%);
+  max-width: 400px;
+  padding: 12px 14px 14px;
+  background: var(--ui-surface-muted, #f1f3f4);
+  border: 1px solid rgb(0 0 0 / 6%);
+  border-radius: 14px;
+  box-shadow:
+    0 8px 22px rgb(15 18 24 / 12%),
+    0 1px 3px rgb(15 18 24 / 8%);
 }
 
 .campaigns-page .campaign-chrome-notification-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--ui-ink-muted);
+  gap: 6px;
+  color: #5f6368;
   font-size: 11px;
   line-height: 16px;
 }
 
-.campaigns-page .campaign-chrome-notification-origin {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.campaigns-page .campaign-chrome-notification-browser {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
-.campaigns-page .campaign-chrome-notification-time {
+/* Chrome 图标：用锥形渐变近似三段彩色与蓝色圆心 */
+.campaigns-page .campaign-chrome-notification-browser-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  background: conic-gradient(from -30deg, #ea4335 0 33%, #fbbc05 0 66%, #34a853 0 100%);
+  border-radius: 50%;
+}
+
+.campaigns-page .campaign-chrome-notification-browser-icon::after {
+  position: absolute;
+  inset: 3px;
+  content: '';
+  background: #1a73e8;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+}
+
+.campaigns-page .campaign-chrome-notification-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-left: auto;
-  white-space: nowrap;
+}
+
+.campaigns-page .campaign-chrome-notification-more {
+  height: 16px;
+  color: #5f6368;
+  font-size: 14px;
+  line-height: 12px;
 }
 
 .campaigns-page .campaign-chrome-notification-close {
-  padding: 0 2px;
-  color: var(--ui-ink-muted);
+  height: 16px;
+  padding: 0;
+  color: #5f6368;
   font-size: 15px;
-  line-height: 16px;
+  line-height: 14px;
   background: transparent;
   border: 0;
   cursor: default;
@@ -860,19 +915,20 @@
 .campaigns-page .campaign-chrome-notification-main {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 14px;
+  margin-top: 14px;
 }
 
 .campaigns-page .campaign-chrome-notification-icon {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 56px;
+  height: 56px;
   flex: none;
   place-items: center;
   overflow: hidden;
-  background: var(--ui-surface-muted, rgb(0 0 0 / 4%));
-  border-radius: 8px;
+  color: #fff;
+  background: #1a73e8;
+  border-radius: 50%;
 }
 
 .campaigns-page .campaign-chrome-notification-icon img {
@@ -884,35 +940,47 @@
 .campaigns-page .campaign-chrome-notification-copy {
   min-width: 0;
   flex: 1;
+  padding-top: 1px;
 }
 
 .campaigns-page .campaign-chrome-notification-copy strong {
   display: block;
   color: var(--ui-ink);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 18px;
+  line-height: 20px;
 }
 
 .campaigns-page .campaign-chrome-notification-copy p {
   display: -webkit-box;
-  margin: 2px 0 0;
+  margin: 4px 0 0;
   overflow: hidden;
-  color: var(--ui-ink-secondary);
-  font-size: 12px;
+  color: #5f6368;
+  font-size: 13px;
   line-height: 18px;
   word-break: break-word;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
 }
 
+.campaigns-page .campaign-chrome-notification-site {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  color: #5f6368;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .campaigns-page .campaign-chrome-notification-image {
   display: block;
   width: 100%;
-  max-height: 150px;
-  margin-top: 8px;
+  max-height: 160px;
+  margin-top: 12px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 10px;
 }
 
 /* 运行历史：目标客户数两行展示 */
