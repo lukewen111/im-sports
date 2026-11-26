@@ -929,6 +929,14 @@
 
 .channels-page .setting-row > div { display: grid; gap: 2px; }
 .channels-page .setting-row small { color: var(--ui-ink-muted); font-size: 12px; }
+.channels-page .browser-push-card {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.channels-page .browser-push-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.channels-page .browser-push-card strong { color: var(--ui-ink); font-size: 14px; font-weight: 600; line-height: 20px; }
+.channels-page .browser-push-card p { margin: 0; color: var(--ui-ink-muted); font-size: 12px; line-height: 18px; }
 
 .channels-page .domain-editor {
   display: flex;

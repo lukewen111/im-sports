@@ -1,15 +1,14 @@
 import type { Channel } from '#/features/channels/channel-data';
-import type { TeamMember } from '#/features/team/team-store';
 import type { Campaign, CampaignRun, CampaignType } from './campaign-data';
 
 import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import { useChannelStore } from '#/features/channels/channel-store';
 import { useDemoServiceStore } from '#/features/service/demo-store';
-import { useTeamStore } from '#/features/team/team-store';
-import { CAMPAIGN_STORAGE_KEY, SDK_CAMPAIGN_LIMIT } from './campaign-data';
-import { campaignInvalidReason, candidateCustomerCount, campaignStatus, memberUsable } from './campaign-rules';
+import { CAMPAIGN_STORAGE_KEY, supportsBrowserPush } from './campaign-data';
+import { browserEligibleTargets, campaignInvalidReason, candidateCustomers, campaignStatus } from './campaign-rules';
 import { seedCampaigns, seedCampaignRuns } from './campaign-seed';
+import { loadSubscriptions } from './campaign-subscription';
 
 export type CampaignInput = Omit<Campaign, 'createdAt' | 'expired' | 'id' | 'updatedAt'> & { expired?: boolean };
 
@@ -41,7 +40,26 @@ function load(): PersistedState {
             delete legacy.channelId;
             changed = true;
           }
+          // 已下线的发送者字段与 SDK 分类：清理旧数据，避免遗留配置影响页面
+          if ('senderId' in campaign) {
+            delete (campaign as Campaign & { senderId?: string }).senderId;
+            changed = true;
+          }
+          // 浏览器通知字段迁移：旧活动补齐默认值，标题留空以便编辑时补填
+          if (typeof (campaign as Partial<Campaign>).notificationTitle !== 'string') {
+            campaign.notificationTitle = '';
+            changed = true;
+          }
+          if (campaign.notificationLinkMode !== 'channel' && campaign.notificationLinkMode !== 'custom') {
+            campaign.notificationLinkMode = 'channel';
+            changed = true;
+          }
         }
+        const legacyCampaignCount = parsed.campaigns.length;
+        const legacyRunCount = parsed.runs.length;
+        parsed.campaigns = parsed.campaigns.filter((campaign) => campaign.type !== ('sdk' as CampaignType));
+        parsed.runs = parsed.runs.filter((run) => run.type !== ('sdk' as CampaignType));
+        if (parsed.campaigns.length !== legacyCampaignCount || parsed.runs.length !== legacyRunCount) changed = true;
         // 旧演示数据修正：「运行中」但缺少 startedAt 的记录转为错过计划的失败记录
         const staleRun = parsed.runs.find((run) => run.id === 'run-telegram-4' && run.status === 'running' && !run.startedAt);
         if (staleRun) {
@@ -60,7 +78,6 @@ function load(): PersistedState {
 
 export const useCampaignStore = defineStore('im-support-campaigns', () => {
   const channelStore = useChannelStore();
-  const teamStore = useTeamStore();
   const demoStore = useDemoServiceStore();
 
   const initial = load();
@@ -83,11 +100,9 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
   watch([campaigns, runs], persist, { deep: true });
 
   const channelOf = (id: string): Channel | undefined => channelStore.channels.find((channel) => channel.id === id);
-  const senderOf = (id: string): TeamMember | undefined => teamStore.members.find((member) => member.id === id);
 
   function invalidReasonFor(campaign: Campaign): string | undefined {
-    const channels = campaign.channelIds.map((id) => channelOf(id));
-    return campaignInvalidReason(campaign, channels, senderOf(campaign.senderId));
+    return campaignInvalidReason(campaign.channelIds.map((id) => channelOf(id)));
   }
 
   function campaignsOf(type: CampaignType) {
@@ -103,20 +118,11 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
   }
 
   function channelOptions(type: CampaignType) {
-    if (type === 'sdk') return [];
     return channelStore.channels.filter((channel) => channel.type === type && channel.enabled);
   }
 
-  /** 发送者候选：租户内全部已启用成员，与渠道及接待团队无关 */
-  function senderOptions() {
-    return teamStore.members.filter((member) => memberUsable(member));
-  }
-
-  const sdkCampaignCount = computed(() => campaigns.value.filter((campaign) => campaign.type === 'sdk').length);
-
   function create(input: CampaignInput): Result<Campaign> {
     const name = input.name.trim();
-    if (input.type === 'sdk' && sdkCampaignCount.value >= SDK_CAMPAIGN_LIMIT) return { error: 'SDK 最多创建 1 个活动' };
     if (campaigns.value.some((campaign) => campaign.type === input.type && campaign.name === name)) return { error: '同一渠道类型下活动名称不可重复' };
     const campaign: Campaign = {
       ...input,
@@ -164,9 +170,6 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     return {};
   }
 
-  /** SDK 无真实渠道客户，用固定客户数演示运行统计 */
-  const SDK_DEMO_CUSTOMERS = 3;
-
   function runNow(id: string): Result<CampaignRun> {
     const campaign = campaigns.value.find((item) => item.id === id);
     if (!campaign) return { error: '活动不存在或已被删除' };
@@ -174,27 +177,44 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     if (invalidReasonFor(campaign)) return { error: '活动配置已失效，请修正后重试' };
     if (isRunning(id)) return { error: '活动正在运行中，请稍后再试' };
 
-    const targets = campaign.type === 'sdk' ? SDK_DEMO_CUSTOMERS : candidateCustomerCount(demoStore.sessions, campaign.channelIds);
+    const targets = candidateCustomers(demoStore.sessions, campaign.channelIds);
+    const targetCustomers = targets.length;
+    // 网页渠道额外统计浏览器推送，Telegram 不适用（null 展示为 —）
+    const web = supportsBrowserPush(campaign.type);
+    const browserTargets = web
+      ? browserEligibleTargets(targets, channelStore.channels, loadSubscriptions(demoStore.sessions, channelStore.channels), campaign)
+      : [];
+    const browserTargetCustomers = web ? browserTargets.length : null;
+
     // 运行开始后编辑活动只影响后续运行，因此消息规模在启动时固定
     const messagesPerCustomer = campaign.imageUrl ? 2 : 1;
+    const messages = targetCustomers * messagesPerCustomer;
+    const failedMessages = targetCustomers > 0 ? Math.min(messages, campaign.imageUrl && targetCustomers >= 5 ? 3 : 0) : 0;
+    const successMessages = messages - failedMessages;
+    const browserFailed = browserTargetCustomers !== null && browserTargetCustomers >= 10 ? Math.max(1, Math.floor(browserTargetCustomers * 0.05)) : 0;
+    const browserSuccess = browserTargetCustomers === null ? null : browserTargetCustomers - browserFailed;
+    // 发送客户数：任一方式至少成功一次的客户去重数；聊天消息按客户逐条发送
+    const finalSentCustomers = successMessages > 0 ? targetCustomers : (browserSuccess ?? 0) > 0 ? (browserTargetCustomers ?? 0) : 0;
+
     const run: CampaignRun = {
       id: `run-${Date.now()}`,
       campaignId: campaign.id,
       type: campaign.type,
       snapshotName: campaign.name,
       status: 'running',
+      targetCustomers,
+      browserTargetCustomers,
       sentCustomers: 0,
       successMessages: 0,
       failedMessages: 0,
+      browserSuccess: browserTargetCustomers === null ? null : 0,
+      browserFailed: browserTargetCustomers === null ? null : 0,
       startedAt: stamp(),
       durationSec: 0,
     };
     runs.value.unshift(run);
 
     // 演示用短暂推进：仅内存态，不做真实调度；运行期间按分片累加统计
-    const messages = targets * messagesPerCustomer;
-    const failed = targets > 0 ? Math.min(messages, campaign.imageUrl && targets >= 5 ? 3 : 0) : 0;
-    const finalSuccess = messages - failed;
     const timer = window.setInterval(() => {
       const current = runs.value.find((item) => item.id === run.id);
       if (!current || current.status !== 'running') {
@@ -203,20 +223,31 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
       }
       const elapsed = Date.now() - new Date(run.startedAt || Date.now()).getTime();
       const progress = Math.min(1, Math.max(0, elapsed / 2600));
-      current.sentCustomers = Math.floor(targets * progress);
-      current.successMessages = Math.floor(finalSuccess * progress);
-      current.failedMessages = Math.floor(failed * progress);
+      current.sentCustomers = Math.floor(finalSentCustomers * progress);
+      current.successMessages = Math.floor(successMessages * progress);
+      current.failedMessages = Math.floor(failedMessages * progress);
+      if (browserTargetCustomers !== null) {
+        current.browserSuccess = Math.floor((browserSuccess ?? 0) * progress);
+        current.browserFailed = Math.floor(browserFailed * progress);
+      }
     }, 250);
 
     window.setTimeout(() => {
       window.clearInterval(timer);
       const current = runs.value.find((item) => item.id === run.id);
       if (!current) return;
-      current.sentCustomers = targets;
-      current.successMessages = finalSuccess;
-      current.failedMessages = failed;
+      current.targetCustomers = targetCustomers;
+      current.browserTargetCustomers = browserTargetCustomers;
+      current.sentCustomers = finalSentCustomers;
+      current.successMessages = successMessages;
+      current.failedMessages = failedMessages;
+      current.browserSuccess = browserTargetCustomers === null ? null : browserSuccess;
+      current.browserFailed = browserTargetCustomers === null ? null : browserFailed;
       current.durationSec = 3;
-      current.status = messages > 0 && current.successMessages === 0 ? 'failed' : 'success';
+      const anySuccess = successMessages > 0 || (browserSuccess ?? 0) > 0;
+      const hasFailure = failedMessages > 0 || browserFailed > 0;
+      // 零目标或全部正常跳过视为成功；有失败且无任何成功视为失败
+      current.status = targetCustomers === 0 || anySuccess || !hasFailure ? 'success' : 'failed';
       if (campaign.repeat === 'once') {
         const target = campaigns.value.find((item) => item.id === campaign.id);
         if (target) {
@@ -229,9 +260,9 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     return { data: run };
   }
 
-  // 渠道或发送者配置失效时自动暂停，恢复后也不自动启用
+  // 渠道配置失效时自动暂停，恢复后也不自动启用
   watch(
-    [() => channelStore.channels, () => teamStore.members, () => teamStore.teams],
+    () => channelStore.channels,
     () => {
       for (const campaign of campaigns.value) {
         if (!campaign.enabled) continue;
@@ -259,9 +290,6 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     remove,
     runNow,
     runsOf,
-    sdkCampaignCount,
-    senderOf,
-    senderOptions,
     toggle,
     update,
   };

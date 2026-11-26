@@ -462,35 +462,6 @@
   margin-bottom: 18px;
 }
 
-.campaigns-page .campaign-form-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.campaigns-page .campaign-form-row.is-single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.campaigns-page .campaign-form-row .el-select {
-  width: 100%;
-}
-
-.campaigns-page .campaigns-create-wrap {
-  position: absolute;
-  top: calc((48px - var(--ui-control-height)) / 2);
-  right: 24px;
-  display: inline-flex;
-  z-index: 2;
-}
-
-.campaigns-page .campaigns-create-wrap .campaigns-create-button {
-  position: static;
-  top: auto;
-  right: auto;
-  z-index: auto;
-}
-
 .campaigns-page .campaign-section-title {
   margin: 4px 0 14px;
   color: var(--ui-ink);
@@ -821,4 +792,139 @@
 .campaigns-page .campaign-run-failed {
   margin-left: 4px;
   color: var(--ui-danger);
+}
+
+/* 预计客户数：沿用表单说明的轻量排版 */
+.campaigns-page .campaign-target-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin-top: 2px;
+  color: var(--ui-ink-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.campaigns-page .campaign-target-summary strong {
+  margin-left: 4px;
+  color: var(--ui-ink-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 浏览器通知 */
+.campaigns-page .campaign-message-meta.is-end {
+  justify-content: flex-end;
+}
+
+.campaigns-page .campaign-chrome-notification {
+  width: 100%;
+  max-width: 380px;
+  padding: 10px 12px 12px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-line-strong);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgb(15 18 24 / 8%);
+}
+
+.campaigns-page .campaign-chrome-notification-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ui-ink-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.campaigns-page .campaign-chrome-notification-origin {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campaigns-page .campaign-chrome-notification-time {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.campaigns-page .campaign-chrome-notification-close {
+  padding: 0 2px;
+  color: var(--ui-ink-muted);
+  font-size: 15px;
+  line-height: 16px;
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+.campaigns-page .campaign-chrome-notification-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.campaigns-page .campaign-chrome-notification-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  background: var(--ui-surface-muted, rgb(0 0 0 / 4%));
+  border-radius: 8px;
+}
+
+.campaigns-page .campaign-chrome-notification-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.campaigns-page .campaign-chrome-notification-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.campaigns-page .campaign-chrome-notification-copy strong {
+  display: block;
+  color: var(--ui-ink);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.campaigns-page .campaign-chrome-notification-copy p {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--ui-ink-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.campaigns-page .campaign-chrome-notification-image {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  margin-top: 8px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+/* 运行历史：目标客户数两行展示 */
+.campaigns-page .campaign-run-count {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.campaigns-page .campaign-run-count .is-sub {
+  color: var(--ui-ink-muted);
+  font-size: 12px;
+  line-height: 16px;
 }

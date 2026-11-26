@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElButton, ElInput, ElPagination, ElTable, ElTableColumn } from 'element-plus';
 import { useCampaignStore } from '#/features/campaigns/campaign-store';
-import { formatCount, runDurationText, runStatusText, runTimeText, sortRuns } from '#/features/campaigns/campaign-rules';
+import { countText, formatCount, runDurationText, runStatusText, runTimeText, sortRuns } from '#/features/campaigns/campaign-rules';
 import { usePrototypeAccess } from '#/features/team/access-store';
 
 const props = defineProps<{ type: CampaignType }>();
@@ -13,6 +13,8 @@ const store = useCampaignStore();
 const access = usePrototypeAccess();
 const route = useRoute();
 const accountTimezone = computed(() => access.current?.timezone || 'UTC+08:00');
+/** 网页渠道展示聊天消息与浏览器推送两类统计，Telegram 只展示消息结果 */
+const isWeb = computed(() => props.type !== 'telegram');
 
 const filter = ref<'all' | CampaignRun['status']>('all');
 const query = ref('');
@@ -78,18 +80,57 @@ watch([filter, query, pageSize], () => {
               <span class="campaign-run-status" :class="`is-${scope.row.status}`">{{ runStatusText(scope.row.status) }}</span>
             </template>
           </ElTableColumn>
-          <ElTableColumn label="发送客户数" width="120">
-            <template #default="scope">{{ formatCount(scope.row.sentCustomers) }}</template>
-          </ElTableColumn>
-          <ElTableColumn label="发送结果" min-width="170">
-            <template #default="scope">
-              <span class="campaign-run-muted">成功</span>
-              {{ formatCount(scope.row.successMessages) }}
-              <span class="campaign-run-muted">/</span>
-              <span class="campaign-run-muted">失败</span>
-              <span :class="{ 'campaign-run-failed': scope.row.failedMessages > 0 }">{{ formatCount(scope.row.failedMessages) }}</span>
-            </template>
-          </ElTableColumn>
+
+          <template v-if="isWeb">
+            <ElTableColumn label="目标客户数" width="130">
+              <template #default="scope">
+                <div class="campaign-run-count">
+                  <span>{{ countText(scope.row.targetCustomers) }}</span>
+                  <span class="is-sub">浏览器：{{ countText(scope.row.browserTargetCustomers) }}</span>
+                </div>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn label="发送客户数" width="110">
+              <template #default="scope">{{ formatCount(scope.row.sentCustomers) }}</template>
+            </ElTableColumn>
+            <ElTableColumn label="聊天消息" min-width="150">
+              <template #default="scope">
+                <span class="campaign-run-muted">成功</span>
+                {{ formatCount(scope.row.successMessages) }}
+                <span class="campaign-run-muted">/</span>
+                <span class="campaign-run-muted">失败</span>
+                <span :class="{ 'campaign-run-failed': scope.row.failedMessages > 0 }">{{ formatCount(scope.row.failedMessages) }}</span>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn label="浏览器推送" min-width="150">
+              <template #default="scope">
+                <span class="campaign-run-muted">成功</span>
+                {{ countText(scope.row.browserSuccess) }}
+                <span class="campaign-run-muted">/</span>
+                <span class="campaign-run-muted">失败</span>
+                <span :class="{ 'campaign-run-failed': (scope.row.browserFailed ?? 0) > 0 }">{{ countText(scope.row.browserFailed) }}</span>
+              </template>
+            </ElTableColumn>
+          </template>
+
+          <template v-else>
+            <ElTableColumn label="目标客户数" width="120">
+              <template #default="scope">{{ countText(scope.row.targetCustomers) }}</template>
+            </ElTableColumn>
+            <ElTableColumn label="发送客户数" width="120">
+              <template #default="scope">{{ formatCount(scope.row.sentCustomers) }}</template>
+            </ElTableColumn>
+            <ElTableColumn label="发送结果" min-width="170">
+              <template #default="scope">
+                <span class="campaign-run-muted">成功</span>
+                {{ formatCount(scope.row.successMessages) }}
+                <span class="campaign-run-muted">/</span>
+                <span class="campaign-run-muted">失败</span>
+                <span :class="{ 'campaign-run-failed': scope.row.failedMessages > 0 }">{{ formatCount(scope.row.failedMessages) }}</span>
+              </template>
+            </ElTableColumn>
+          </template>
+
           <ElTableColumn label="运行时间" width="180">
             <template #default="scope">
               <span :class="{ 'campaign-run-muted': !scope.row.startedAt }">{{ runTimeText(scope.row, accountTimezone) }}</span>

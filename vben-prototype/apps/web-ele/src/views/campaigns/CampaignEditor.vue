@@ -4,12 +4,28 @@ import type { CampaignInput } from '#/features/campaigns/campaign-store';
 
 import { computed, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElButton, ElDatePicker, ElForm, ElFormItem, ElInput, ElMessage, ElOption, ElSelect, ElSwitch, ElTimePicker } from 'element-plus';
+import {
+  ElButton,
+  ElDatePicker,
+  ElForm,
+  ElFormItem,
+  ElInput,
+  ElMessage,
+  ElOption,
+  ElRadio,
+  ElRadioGroup,
+  ElSelect,
+  ElSwitch,
+  ElTimePicker,
+} from 'element-plus';
 import QIcon from '#/components/q-icon/QIcon.vue';
-import { CAMPAIGN_TEXT_MAX_LENGTH, CAMPAIGN_TIMEZONES, DEFAULT_CAMPAIGN_TIMEZONE, repeatMeta, weekdayLabels } from '#/features/campaigns/campaign-data';
+import { CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH, CAMPAIGN_TEXT_MAX_LENGTH, CAMPAIGN_TIMEZONES, DEFAULT_CAMPAIGN_TIMEZONE, repeatMeta, supportsBrowserPush, weekdayLabels } from '#/features/campaigns/campaign-data';
 import { countVisibleCharacters, truncateVisibleCharacters } from '#/features/channels/channel-data';
-import { defaultOnceDate, zonedNow } from '#/features/campaigns/campaign-rules';
+import { browserEligibleTargetCount, candidateCustomers, defaultNotificationLinkHint, defaultOnceDate, formatCount, notificationBody, zonedNow } from '#/features/campaigns/campaign-rules';
 import { useCampaignStore } from '#/features/campaigns/campaign-store';
+import { loadSubscriptions } from '#/features/campaigns/campaign-subscription';
+import { useChannelStore } from '#/features/channels/channel-store';
+import { useDemoServiceStore } from '#/features/service/demo-store';
 import { usePrototypeAccess } from '#/features/team/access-store';
 import ChannelGlyph from '#/views/channels/ChannelGlyph.vue';
 
@@ -17,6 +33,8 @@ const props = defineProps<{ type: CampaignType; campaignId?: string }>();
 const emit = defineEmits<{ cancel: []; saved: [] }>();
 
 const store = useCampaignStore();
+const channelStore = useChannelStore();
+const demoStore = useDemoServiceStore();
 const access = usePrototypeAccess();
 const router = useRouter();
 
@@ -32,8 +50,10 @@ interface Draft {
   text: string;
   imageUrl?: string;
   imageName?: string;
+  notificationTitle: string;
+  notificationLinkMode: 'channel' | 'custom';
+  notificationCustomUrl?: string;
   channelIds: string[];
-  senderId: string;
   repeat: CampaignRepeat;
   date: string;
   weekdays: number[];
@@ -48,8 +68,10 @@ const draft = reactive<Draft>({
   text: '',
   imageUrl: undefined,
   imageName: undefined,
+  notificationTitle: '',
+  notificationLinkMode: 'channel',
+  notificationCustomUrl: undefined,
   channelIds: [],
-  senderId: '',
   repeat: 'once',
   date: defaultOnceDate(),
   weekdays: [],
@@ -59,15 +81,41 @@ const draft = reactive<Draft>({
   enabled: false,
 });
 
-const errors = reactive({ name: '', message: '', channel: '', sender: '', date: '', days: '', time: '', timezone: '' });
+const errors = reactive({ name: '', message: '', channel: '', notificationTitle: '', notificationUrl: '', date: '', days: '', time: '', timezone: '' });
 const fileInput = ref<HTMLInputElement>();
 const saving = ref(false);
 /** 与聊天侧一致的可见字符计数（emoji、组合字符按 1 个计） */
 const textLength = computed(() => countVisibleCharacters(draft.text));
+const notificationTitleLength = computed(() => countVisibleCharacters(draft.notificationTitle));
+/** 网页渠道展示浏览器通知，Telegram 不展示 */
+const web = computed(() => supportsBrowserPush(props.type));
 
-const isSdk = computed(() => props.type === 'sdk');
 const channelOptions = computed(() => store.channelOptions(props.type));
 const selectedChannels = computed(() => draft.channelIds.map((id) => store.channelOf(id)));
+/** 通知 Logo 与默认链接取首个仍存在的已选渠道 */
+const previewChannel = computed(() => selectedChannels.value.find(Boolean));
+const multiChannel = computed(() => draft.channelIds.length > 1);
+const defaultLinkHint = computed(() => defaultNotificationLinkHint(props.type, previewChannel.value));
+/** 系统通知预览的站点名取渠道来源站点 */
+const notificationSiteName = computed(() => {
+  try {
+    return new URL(defaultLinkHint.value).host;
+  } catch {
+    return 'support.example.com';
+  }
+});
+const notificationTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+/** 通知正文由消息文本派生，纯图片消息为空 */
+const notificationBodyText = computed(() => notificationBody(draft.text));
+/** 预计目标客户数；未选渠道时不统计，展示为 — */
+const targetCustomers = computed(() => (draft.channelIds.length === 0 ? undefined : candidateCustomers(demoStore.sessions, draft.channelIds).length));
+/** 其中具备浏览器推送资格的人数；未选渠道或 Telegram 不展示 */
+const browserTargetCount = computed(() => {
+  if (!web.value || draft.channelIds.length === 0) return undefined;
+  const targets = candidateCustomers(demoStore.sessions, draft.channelIds);
+  const subscriptions = loadSubscriptions(demoStore.sessions, channelStore.channels);
+  return browserEligibleTargetCount(targets, channelStore.channels, subscriptions, draft);
+});
 /** 已选但当前不可用的渠道（停用或删除），仅用于展示禁用标签 */
 const invalidChannels = computed(() =>
   draft.channelIds
@@ -84,14 +132,10 @@ const channelProblem = computed(() => {
   if (missing) parts.push(`${missing} 个已删除`);
   return `所选渠道中有 ${parts.join('、')}`;
 });
-const senderOptions = computed(() => store.senderOptions());
-const senderUnavailable = computed(() => Boolean(draft.senderId) && !senderOptions.value.some((member) => member.id === draft.senderId));
 const channelFieldError = computed(() => (channelProblem.value ? `${channelProblem.value}，请重新选择` : errors.channel));
-const senderFieldError = computed(() => (senderUnavailable.value ? '当前发送者已失效，请重新选择' : errors.sender));
-const sdkLimitReached = computed(() => props.type === 'sdk' && !props.campaignId && store.sdkCampaignCount >= 1);
 
 function resetErrors() {
-  Object.assign(errors, { name: '', message: '', channel: '', sender: '', date: '', days: '', time: '', timezone: '' });
+  Object.assign(errors, { name: '', message: '', channel: '', notificationTitle: '', notificationUrl: '', date: '', days: '', time: '', timezone: '' });
 }
 
 function loadSource() {
@@ -110,8 +154,10 @@ function loadSource() {
     text: campaign.text,
     imageUrl: campaign.imageUrl,
     imageName: campaign.imageName,
+    notificationTitle: campaign.notificationTitle || '',
+    notificationLinkMode: campaign.notificationLinkMode === 'custom' ? 'custom' : 'channel',
+    notificationCustomUrl: campaign.notificationCustomUrl,
     channelIds: [...campaign.channelIds],
-    senderId: campaign.senderId,
     repeat: campaign.repeat,
     date: campaign.date || defaultOnceDate(),
     weekdays: [...campaign.weekdays],
@@ -179,6 +225,12 @@ function onTextInput(value: string) {
   if (limited !== value) draft.text = limited;
 }
 
+function onNotificationTitleInput(value: string) {
+  if (countVisibleCharacters(value) > CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH) {
+    draft.notificationTitle = truncateVisibleCharacters(value, CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH);
+  }
+}
+
 function onTextPaste(event: Event) {
   const pasteEvent = event as ClipboardEvent;
   const pasted = pasteEvent.clipboardData?.getData('text') ?? '';
@@ -204,12 +256,23 @@ function validate() {
   if (!draft.name.trim()) errors.name = '请输入活动名称';
   if (textLength.value > CAMPAIGN_TEXT_MAX_LENGTH) errors.message = `消息不能超过 ${CAMPAIGN_TEXT_MAX_LENGTH} 字`;
   else if (!draft.text.trim() && !draft.imageUrl) errors.message = '消息与图片至少填写一项';
-  if (!isSdk.value) {
-    if (draft.channelIds.length === 0) errors.channel = '请选择渠道';
-    else if (channelProblem.value) errors.channel = `${channelProblem.value}，请重新选择`;
+  if (draft.channelIds.length === 0) errors.channel = '请选择渠道';
+  else if (channelProblem.value) errors.channel = `${channelProblem.value}，请重新选择`;
+  if (web.value) {
+    if (!draft.notificationTitle.trim()) errors.notificationTitle = '请输入通知标题';
+    else if (notificationTitleLength.value > CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH) errors.notificationTitle = `通知标题不能超过 ${CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH} 个字符`;
+    if (draft.notificationLinkMode === 'custom') {
+      const raw = (draft.notificationCustomUrl || '').trim();
+      if (!raw) errors.notificationUrl = '请输入跳转链接';
+      else {
+        try {
+          if (new URL(raw).protocol !== 'https:') errors.notificationUrl = '仅支持 https 链接';
+        } catch {
+          errors.notificationUrl = '请输入有效的链接';
+        }
+      }
+    }
   }
-  if (!draft.senderId) errors.sender = '请选择发送者';
-  else if (senderUnavailable.value) errors.sender = '当前发送者已失效，请重新选择';
   if (!draft.time) errors.time = '请选择发送时间';
   if (!draft.timezone) errors.timezone = '请选择时区';
   if (draft.repeat === 'once') {
@@ -229,10 +292,6 @@ function save() {
     ElMessage.warning('活动不存在或已被删除');
     return;
   }
-  if (sdkLimitReached.value) {
-    ElMessage.warning('SDK 最多创建 1 个活动');
-    return;
-  }
   if (!access.canVisit('/campaigns')) {
     ElMessage.warning('活动权限已被收回，无法保存');
     void router.replace(access.home);
@@ -246,8 +305,10 @@ function save() {
     text: draft.text.trim(),
     imageUrl: draft.imageUrl,
     imageName: draft.imageName,
-    channelIds: isSdk.value ? [] : [...draft.channelIds],
-    senderId: draft.senderId,
+    notificationTitle: web.value ? draft.notificationTitle.trim() : '',
+    notificationLinkMode: draft.notificationLinkMode,
+    notificationCustomUrl: draft.notificationLinkMode === 'custom' ? draft.notificationCustomUrl?.trim() : undefined,
+    channelIds: [...draft.channelIds],
     repeat: draft.repeat,
     date: draft.repeat === 'once' ? draft.date : undefined,
     weekdays: draft.repeat === 'weekly' ? [...draft.weekdays].sort((a, b) => a - b) : [],
@@ -274,14 +335,6 @@ function save() {
       <div class="ui-empty">
         <strong>活动不存在或已被删除</strong>
         <span>请返回活动列表后重试。</span>
-        <ElButton class="ui-btn-outline" @click="emit('cancel')">返回活动列表</ElButton>
-      </div>
-    </div>
-
-    <div v-else-if="sdkLimitReached" class="campaigns-scroll">
-      <div class="ui-empty">
-        <strong>SDK 最多创建 1 个活动</strong>
-        <span>请先删除已有的 SDK 活动后再创建。</span>
         <ElButton class="ui-btn-outline" @click="emit('cancel')">返回活动列表</ElButton>
       </div>
     </div>
@@ -339,31 +392,73 @@ function save() {
 
           <section class="campaign-section">
             <h2 class="campaign-section-title">发送设置</h2>
-            <div class="campaign-form-row" :class="{ 'is-single': isSdk }">
-              <ElFormItem v-if="!isSdk" label="选择渠道" required :error="channelFieldError">
-                <ElSelect
-                  v-model="draft.channelIds"
-                  multiple
-                  placeholder="请选择渠道"
-                  popper-class="campaign-channel-select-popper"
-                >
-                  <ElOption v-for="item in invalidChannels" :key="`invalid-${item.id}`" :label="item.channel?.name || '已删除的渠道'" :value="item.id" disabled />
-                  <ElOption v-for="channel in channelOptions" :key="channel.id" :label="channel.name" :value="channel.id">
-                    <span class="campaign-channel-option">
-                      <ChannelGlyph :type="channel.type" :size="18" />
-                      <span class="campaign-channel-option-name">{{ channel.name }}</span>
-                    </span>
-                  </ElOption>
-                </ElSelect>
-                <p v-if="channelOptions.length === 0" class="campaign-field-hint">当前渠道类型下暂无已启用渠道，请先在渠道管理中启用。</p>
-              </ElFormItem>
-              <ElFormItem label="发送者" required :error="senderFieldError">
-                <ElSelect v-model="draft.senderId" placeholder="请选择发送者">
-                  <ElOption v-if="senderUnavailable" label="已失效的发送者" :value="draft.senderId" disabled />
-                  <ElOption v-for="member in senderOptions" :key="member.id" :label="member.kind === 'ai' ? `${member.name}（AI 成员）` : member.name" :value="member.id" />
-                </ElSelect>
-                <p v-if="senderOptions.length === 0" class="campaign-field-hint">暂无已启用的成员。</p>
-              </ElFormItem>
+            <ElFormItem label="选择渠道" required :error="channelFieldError">
+              <ElSelect
+                v-model="draft.channelIds"
+                multiple
+                placeholder="请选择渠道"
+                popper-class="campaign-channel-select-popper"
+              >
+                <ElOption v-for="item in invalidChannels" :key="`invalid-${item.id}`" :label="item.channel?.name || '已删除的渠道'" :value="item.id" disabled />
+                <ElOption v-for="channel in channelOptions" :key="channel.id" :label="channel.name" :value="channel.id">
+                  <span class="campaign-channel-option">
+                    <ChannelGlyph :type="channel.type" :size="18" />
+                    <span class="campaign-channel-option-name">{{ channel.name }}</span>
+                  </span>
+                </ElOption>
+              </ElSelect>
+              <p v-if="channelOptions.length === 0" class="campaign-field-hint">当前渠道类型下暂无已启用渠道，请先在渠道管理中启用。</p>
+            </ElFormItem>
+          </section>
+
+          <section v-if="web" class="campaign-section">
+            <h2 class="campaign-section-title">浏览器通知</h2>
+
+            <ElFormItem label="通知标题" required :error="errors.notificationTitle">
+              <ElInput v-model="draft.notificationTitle" placeholder="请输入通知标题" @input="onNotificationTitleInput" />
+              <div class="campaign-message-meta is-end">
+                <span class="campaign-message-count" :class="{ 'is-over': notificationTitleLength > CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH }">
+                  已输入 {{ notificationTitleLength }} / {{ CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH }}
+                </span>
+              </div>
+            </ElFormItem>
+
+            <ElFormItem label="跳转链接" :error="draft.notificationLinkMode === 'custom' ? errors.notificationUrl : ''">
+              <ElRadioGroup v-model="draft.notificationLinkMode">
+                <ElRadio value="channel">渠道对应网址</ElRadio>
+                <ElRadio value="custom">自定义 URL</ElRadio>
+              </ElRadioGroup>
+              <ElInput v-if="draft.notificationLinkMode === 'custom'" v-model="draft.notificationCustomUrl" placeholder="https://example.com/activity" />
+            </ElFormItem>
+
+            <ElFormItem label="通知预览">
+              <div class="campaign-chrome-notification">
+                <div class="campaign-chrome-notification-head">
+                  <span class="campaign-chrome-notification-origin">{{ notificationSiteName }}</span>
+                  <span class="campaign-chrome-notification-time">{{ notificationTime }}</span>
+                  <button class="campaign-chrome-notification-close" type="button" tabindex="-1" aria-label="关闭">×</button>
+                </div>
+                <div class="campaign-chrome-notification-main">
+                  <div class="campaign-chrome-notification-icon">
+                    <img v-if="previewChannel?.brandAvatar" :src="previewChannel.brandAvatar" alt="" />
+                    <ChannelGlyph v-else :type="previewChannel?.type || type" :size="18" />
+                  </div>
+                  <div class="campaign-chrome-notification-copy">
+                    <strong>{{ draft.notificationTitle.trim() || '通知标题' }}</strong>
+                    <p v-if="notificationBodyText">{{ notificationBodyText }}</p>
+                  </div>
+                </div>
+                <img v-if="draft.imageUrl" class="campaign-chrome-notification-image" :src="draft.imageUrl" alt="" />
+              </div>
+              <p v-if="multiChannel" class="campaign-field-hint">以实际发送渠道为准</p>
+            </ElFormItem>
+          </section>
+
+          <section class="campaign-section">
+            <h2 class="campaign-section-title">预计客户数量</h2>
+            <div class="campaign-target-summary">
+              <span>预计目标客户数 <strong>{{ targetCustomers === undefined ? '—' : formatCount(targetCustomers) }}</strong></span>
+              <span v-if="web">浏览器推送 <strong>{{ browserTargetCount === undefined ? '—' : formatCount(browserTargetCount) }}</strong></span>
             </div>
           </section>
 

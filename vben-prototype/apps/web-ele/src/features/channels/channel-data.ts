@@ -9,7 +9,7 @@ export type WidgetIcon = 'custom' | 'message' | 'message-dark' | 'message-line';
 export interface Team { accepting: boolean; avatar?: string; color?: string; id: string; name: string; status: 'active' | 'invalid' }
 export interface Channel {
   allowedDomains: string[]; botToken?: string; brandAvatar?: string; brandName: string;
-  brandSignature: string; chatPageUrl?: string; createdAt: string; enabled: boolean; id: string; installCode?: string;
+  brandSignature: string; browserPushEnabled: boolean; chatPageUrl?: string; createdAt: string; enabled: boolean; id: string; installCode?: string;
   installCheckedAt?: string; installStatus?: 'success' | 'unchecked'; language: string; name: string; soundEnabled: boolean; teamId?: string;
   telegramBotId?: string; themeColor: string; type: ChannelType; updatedAt: string; websiteDomain?: string; widgetCustomIcon?: string;
   widgetDesktopVisible: boolean; widgetIcon: WidgetIcon; widgetMobileOffsetX: number; widgetMobileOffsetY: number;
@@ -32,7 +32,7 @@ export const teams: Team[] = [
 
 const now = () => new Date().toISOString();
 const defaults = (type: ChannelType, id: string): Omit<Channel, 'createdAt' | 'id' | 'name' | 'type' | 'updatedAt'> => ({
-  allowedDomains: [], brandName: 'IM Support', brandSignature: '有问题？我们随时为您提供帮助。', enabled: true, teamId: DEFAULT_TEAM_ID,
+  allowedDomains: [], brandName: 'IM Support', brandSignature: '有问题？我们随时为您提供帮助。', browserPushEnabled: false, enabled: true, teamId: DEFAULT_TEAM_ID,
   installCode: type === 'web-widget' ? `<script src="https://cdn.example.com/widget.js" data-channel="${id}" async></script>` : undefined,
   installStatus: type === 'web-widget' ? 'unchecked' : undefined, language: '自动', soundEnabled: true, themeColor: '#1c1f26',
   widgetDesktopVisible: true, widgetIcon: 'message', widgetMobileOffsetX: 24, widgetMobileOffsetY: 24,
@@ -49,9 +49,9 @@ const extraSeedChannels: Channel[] = [
   { ...defaults('chat-page', 'channel-chat-page-campaign'), brandSignature: '活动咨询在线', chatPageUrl: '/chat/100002', createdAt: '2026-10-15T17:05:00.000Z', id: 'channel-chat-page-campaign', name: '活动咨询聊天页', teamId: '100002', type: 'chat-page', updatedAt: now() },
 ];
 const seedChannels: Channel[] = [
-  { ...defaults('web-widget', 'channel-web-widget-main'), createdAt: '2026-10-21T10:30:00.000Z', id: 'channel-web-widget-main', installCheckedAt: '2026-10-21T10:12:00.000Z', installStatus: 'success', name: '官网网站小部件', type: 'web-widget', updatedAt: now(), websiteDomain: 'support.example.com', widgetMobileOffsetX: 16, widgetMobileOffsetY: 16 },
+  { ...defaults('web-widget', 'channel-web-widget-main'), browserPushEnabled: true, createdAt: '2026-10-21T10:30:00.000Z', id: 'channel-web-widget-main', installCheckedAt: '2026-10-21T10:12:00.000Z', installStatus: 'success', name: '官网网站小部件', type: 'web-widget', updatedAt: now(), websiteDomain: 'support.example.com', widgetMobileOffsetX: 16, widgetMobileOffsetY: 16 },
   { ...defaults('telegram', 'channel-telegram-payment'), botToken: '123456789:mock_telegram_payment_bot', createdAt: '2026-10-20T15:18:00.000Z', id: 'channel-telegram-payment', name: 'TG 充值渠道', teamId: '100002', telegramBotId: '123456789', type: 'telegram', updatedAt: now() },
-  { ...defaults('chat-page', 'channel-chat-page-support'), brandSignature: '在线客户服务', chatPageUrl: `/chat/${DEFAULT_TEAM_ID}`, createdAt: '2026-10-19T09:42:00.000Z', id: 'channel-chat-page-support', name: '客户服务聊天页面', type: 'chat-page', updatedAt: now() },
+  { ...defaults('chat-page', 'channel-chat-page-support'), brandSignature: '在线客户服务', browserPushEnabled: true, chatPageUrl: `/chat/${DEFAULT_TEAM_ID}`, createdAt: '2026-10-19T09:42:00.000Z', id: 'channel-chat-page-support', name: '客户服务聊天页面', type: 'chat-page', updatedAt: now() },
   ...extraSeedChannels,
 ];
 export const STORAGE_KEY = 'im-support-vben:channels-v4';

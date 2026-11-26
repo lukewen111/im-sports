@@ -81,7 +81,7 @@ const previewCopy: Record<string, [string, string]> = {
 
 const detail = computed(() => detailDraft.value);
 const sectionFields: Record<DetailSection, (keyof Channel)[]> = {
-  basic: ['botToken', 'language', 'name', 'teamId', 'websiteDomain'],
+  basic: ['botToken', 'browserPushEnabled', 'language', 'name', 'teamId', 'websiteDomain'],
   appearance: ['brandAvatar', 'brandName', 'brandSignature', 'themeColor'],
   display: ['allowedDomains', 'widgetCustomIcon', 'widgetDesktopVisible', 'widgetIcon', 'widgetMobileOffsetX', 'widgetMobileOffsetY', 'widgetMobilePosition', 'widgetMobileVisible', 'widgetOffsetX', 'widgetOffsetY', 'widgetPosition'],
 };
@@ -395,6 +395,13 @@ watch(pageSize, () => { page.value = 1; });
                 <ElFormItem v-if="detail.type === 'telegram'" label="Bot Token"><ElInput v-model="detail.botToken" type="password" :disabled="!permissions.edit" placeholder="••••••••••••" /></ElFormItem>
                 <ElFormItem v-if="detail.type !== 'telegram'" label="界面语言"><ChannelOptionSelect v-model="detail.language" :disabled="!permissions.edit" :options="languageOptions" /></ElFormItem>
                 <ElFormItem label="接待团队"><ChannelOptionSelect v-if="detail.type !== 'chat-page'" v-model="detail.teamId" :disabled="!permissions.edit" :options="teamOptions" placeholder="选择接待团队" variant="team" /><div v-else class="readonly-team"><TeamAvatar :team="store.resolveTeam(detail.teamId)" />{{ store.resolveTeam(detail.teamId)?.name || '通用团队' }}</div></ElFormItem>
+                <div v-if="detail.type !== 'telegram'" class="browser-push-card">
+                  <div class="browser-push-head">
+                    <strong>浏览器推送</strong>
+                    <ElSwitch v-model="detail.browserPushEnabled" :disabled="!permissions.edit" />
+                  </div>
+                  <p>开启后，可向已授权浏览器通知的客户发送活动消息，客户离开网站后仍可接收通知。</p>
+                </div>
               </ElForm>
               <ElForm v-else-if="detailSection === 'appearance'" label-position="top">
                 <div class="brand-grid"><div><ElFormItem label="品牌名称"><ElInput v-model="detail.brandName" :disabled="!permissions.edit" /><span class="visible-count" :class="{ 'is-error': countVisibleCharacters(detail.brandName) > 50 }">{{ countVisibleCharacters(detail.brandName) }} / 50</span></ElFormItem><ElFormItem label="签名"><ElInput v-model="detail.brandSignature" :disabled="!permissions.edit" /><span class="visible-count" :class="{ 'is-error': countVisibleCharacters(detail.brandSignature) > 50 }">{{ countVisibleCharacters(detail.brandSignature) }} / 50</span></ElFormItem></div><ElFormItem label="品牌 LOGO"><div class="image-upload-group"><label class="image-upload" :class="{ 'is-disabled': !permissions.edit }"><img v-if="detail.brandAvatar" :src="detail.brandAvatar" alt="品牌 LOGO" /><QIcon v-else name="plus" :size="20" /><input type="file" accept=".jpg,.jpeg,.png,.webp" :disabled="!permissions.edit" @change="uploadImage($event, 'brandAvatar')" /></label><button v-if="detail.brandAvatar && permissions.edit" type="button" @click="clearImage('brandAvatar')" class="ui-btn-danger-text">删除</button></div></ElFormItem></div>

@@ -1,8 +1,15 @@
 import type { Channel } from '#/features/channels/channel-data';
-import type { TeamMember } from '#/features/team/team-store';
-import type { Campaign, CampaignRun, CampaignStatus } from './campaign-data';
+import type { Campaign, CampaignNotificationLinkMode, CampaignRun, CampaignStatus, CampaignType } from './campaign-data';
+import type { CampaignSubscription } from './campaign-subscription';
 
-import { DEFAULT_CAMPAIGN_TIMEZONE, weekdayLabels } from './campaign-data';
+import { countVisibleCharacters, truncateVisibleCharacters } from '#/features/channels/channel-data';
+import {
+  CAMPAIGN_NOTIFICATION_BODY_KEEP_LENGTH,
+  CAMPAIGN_NOTIFICATION_BODY_MAX_LENGTH,
+  CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH,
+  DEFAULT_CAMPAIGN_TIMEZONE,
+  weekdayLabels,
+} from './campaign-data';
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -38,25 +45,17 @@ export function scheduleSummary(campaign: Campaign): string {
   return `每月${days} ${campaign.time}`;
 }
 
-export function memberUsable(member: TeamMember): boolean {
-  if (member.kind === 'ai') return member.exception !== 'agent';
-  return member.enabled !== false;
-}
-
 /** 配置失效原因，用于活动卡片提示与保存校验；渠道问题只报数量，不点名 */
-export function campaignInvalidReason(campaign: Campaign, channels: Array<Channel | undefined>, sender: TeamMember | undefined): string | undefined {
-  if (campaign.type !== 'sdk') {
-    if (channels.length === 0) return '未选择渠道';
-    const disabled = channels.filter((channel) => channel && !channel.enabled).length;
-    const missing = channels.filter((channel) => !channel).length;
-    if (disabled || missing) {
-      const parts: string[] = [];
-      if (disabled) parts.push(`${disabled} 个已停用`);
-      if (missing) parts.push(`${missing} 个已删除`);
-      return `所选渠道中有 ${parts.join('、')}`;
-    }
+export function campaignInvalidReason(channels: Array<Channel | undefined>): string | undefined {
+  if (channels.length === 0) return '未选择渠道';
+  const disabled = channels.filter((channel) => channel && !channel.enabled).length;
+  const missing = channels.filter((channel) => !channel).length;
+  if (disabled || missing) {
+    const parts: string[] = [];
+    if (disabled) parts.push(`${disabled} 个已停用`);
+    if (missing) parts.push(`${missing} 个已删除`);
+    return `所选渠道中有 ${parts.join('、')}`;
   }
-  if (!sender || !memberUsable(sender)) return '发送者已失效';
   return undefined;
 }
 
@@ -74,6 +73,12 @@ export function formatDuration(totalSeconds: number): string {
 /** 数量按英文逗号千分位展示 */
 export function formatCount(value: number): string {
   return Math.max(0, Math.floor(value)).toLocaleString('en-US');
+}
+
+/** 运行历史数值展示：null / undefined 表示不适用，显示「—」，真实 0 仍显示 0 */
+export function countText(value?: null | number): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—';
+  return formatCount(value);
 }
 
 interface ZoneClock {
@@ -174,6 +179,70 @@ export function candidateCustomerCount(
   channelIds: string[],
 ): number {
   return candidateCustomers(sessions, channelIds).length;
+}
+
+export interface NotificationConfigInput {
+  notificationTitle: string;
+  notificationLinkMode: CampaignNotificationLinkMode;
+  notificationCustomUrl?: string;
+}
+
+/** 浏览器通知正文：取消息文本前 140 个字符，超出时保留 139 个字符并追加省略号 */
+export function notificationBody(text: string): string {
+  const value = (text || '').trim();
+  if (!value) return '';
+  if (countVisibleCharacters(value) <= CAMPAIGN_NOTIFICATION_BODY_MAX_LENGTH) return value;
+  return `${truncateVisibleCharacters(value, CAMPAIGN_NOTIFICATION_BODY_KEEP_LENGTH)}…`;
+}
+
+/** 通知配置是否有效：标题必填且不超限；自定义跳转必须是 https 地址 */
+export function notificationConfigValid(input: NotificationConfigInput): boolean {
+  const title = input.notificationTitle.trim();
+  if (!title || countVisibleCharacters(title) > CAMPAIGN_NOTIFICATION_TITLE_MAX_LENGTH) return false;
+  if (input.notificationLinkMode === 'custom') {
+    const raw = (input.notificationCustomUrl || '').trim();
+    if (!raw) return false;
+    try {
+      return new URL(raw).protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** 默认跳转地址提示：网站小部件取来源网站首页，聊天页面取渠道公开链接 */
+export function defaultNotificationLinkHint(type: CampaignType, channel?: Channel): string {
+  if (type === 'web-widget') return channel?.websiteDomain ? `https://${channel.websiteDomain}/` : '来源网站首页';
+  if (type === 'chat-page') return channel?.chatPageUrl || '渠道公开链接';
+  return '—';
+}
+
+/** 具备浏览器推送资格的目标：实际发送渠道已开启推送、通知配置有效、且该渠道存在有效订阅 */
+export function browserEligibleTargets(
+  targets: CampaignTarget[],
+  channels: Channel[],
+  subscriptions: CampaignSubscription[],
+  config: NotificationConfigInput,
+): CampaignTarget[] {
+  if (!notificationConfigValid(config)) return [];
+  const channelMap = new Map(channels.map((channel) => [channel.id, channel]));
+  const subscribed = new Set(
+    subscriptions
+      .filter((subscription) => subscription.valid)
+      .map((subscription) => `${subscription.channelId}:${subscription.customerId}`),
+  );
+  return targets.filter((target) => Boolean(channelMap.get(target.channelId)?.browserPushEnabled) && subscribed.has(`${target.channelId}:${target.customerId}`));
+}
+
+/** 具备浏览器推送资格的目标人数 */
+export function browserEligibleTargetCount(
+  targets: CampaignTarget[],
+  channels: Channel[],
+  subscriptions: CampaignSubscription[],
+  config: NotificationConfigInput,
+): number {
+  return browserEligibleTargets(targets, channels, subscriptions, config).length;
 }
 
 /** 由当前时间生成单次活动默认日期（次日） */
