@@ -92,8 +92,11 @@ const web = computed(() => supportsBrowserPush(props.type));
 
 const channelOptions = computed(() => store.channelOptions(props.type));
 const selectedChannels = computed(() => draft.channelIds.map((id) => store.channelOf(id)));
-/** 通知 Logo 与默认链接取首个仍存在的已选渠道 */
-const previewChannel = computed(() => selectedChannels.value.find(Boolean));
+/** 通知 Logo 与默认链接优先取实际会发送的渠道：启用且开启浏览器推送，其次启用渠道 */
+const previewChannel = computed(() => {
+  const channels = selectedChannels.value.filter((channel): channel is NonNullable<typeof channel> => Boolean(channel));
+  return channels.find((channel) => channel.enabled && channel.browserPushEnabled) ?? channels.find((channel) => channel.enabled) ?? channels[0];
+});
 const multiChannel = computed(() => draft.channelIds.length > 1);
 const defaultLinkHint = computed(() => defaultNotificationLinkHint(props.type, previewChannel.value));
 /** 系统通知预览的站点名取渠道来源站点 */
@@ -398,7 +401,7 @@ function save() {
                 placeholder="请选择渠道"
                 popper-class="campaign-channel-select-popper"
               >
-                <ElOption v-for="item in invalidChannels" :key="`invalid-${item.id}`" :label="item.channel?.name || '已删除的渠道'" :value="item.id" disabled />
+                <ElOption v-for="item in invalidChannels" :key="`invalid-${item.id}`" :label="item.channel?.name || '已删除的渠道'" :value="item.id" />
                 <ElOption v-for="channel in channelOptions" :key="channel.id" :label="channel.name" :value="channel.id">
                   <span class="campaign-channel-option">
                     <ChannelGlyph :type="channel.type" :size="18" />

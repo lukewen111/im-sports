@@ -66,6 +66,13 @@ function load(): PersistedState {
           Object.assign(staleRun, { durationSec: 0, plannedAt: '2026-11-20T12:00:00.000Z', startedAt: undefined, status: 'failed' });
           changed = true;
         }
+        // 旧演示数据修正：已实际开始且零目标的运行应为成功，而不是失败
+        for (const run of parsed.runs) {
+          if (run.status === 'failed' && run.startedAt && run.targetCustomers === 0) {
+            run.status = 'success';
+            changed = true;
+          }
+        }
         if (changed) localStorage.setItem(CAMPAIGN_STORAGE_KEY, JSON.stringify(parsed));
         return parsed;
       }
@@ -143,7 +150,12 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     const name = input.name.trim();
     if (campaigns.value.some((item) => item.type === campaign.type && item.id !== id && item.name === name)) return { error: '同一渠道类型下活动名称不可重复' };
     const wasExpired = campaignStatus(campaign) === 'expired';
-    const nextExpired = input.repeat === 'once' ? Boolean(input.expired) : false;
+    // 单次活动的过期标记只在计划时间变化时重置；仅改名/改消息不应恢复已过期活动
+    const planChanged = campaign.repeat !== input.repeat
+      || campaign.date !== input.date
+      || campaign.time !== input.time
+      || campaign.timezone !== input.timezone;
+    const nextExpired = input.repeat === 'once' ? (planChanged ? false : Boolean(campaign.expired)) : false;
     Object.assign(campaign, input, {
       name,
       expired: nextExpired,
@@ -193,8 +205,8 @@ export const useCampaignStore = defineStore('im-support-campaigns', () => {
     const successMessages = messages - failedMessages;
     const browserFailed = browserTargetCustomers !== null && browserTargetCustomers >= 10 ? Math.max(1, Math.floor(browserTargetCustomers * 0.05)) : 0;
     const browserSuccess = browserTargetCustomers === null ? null : browserTargetCustomers - browserFailed;
-    // 发送客户数：任一方式至少成功一次的客户去重数；聊天消息按客户逐条发送
-    const finalSentCustomers = successMessages > 0 ? targetCustomers : (browserSuccess ?? 0) > 0 ? (browserTargetCustomers ?? 0) : 0;
+    // 发送客户数：任一方式至少成功一次的客户去重数，不能超过目标客户数
+    const finalSentCustomers = Math.min(targetCustomers, successMessages + (browserSuccess ?? 0));
 
     const run: CampaignRun = {
       id: `run-${Date.now()}`,
