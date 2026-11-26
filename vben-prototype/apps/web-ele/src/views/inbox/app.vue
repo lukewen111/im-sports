@@ -4,7 +4,7 @@ import type { DemoAttachment, DemoMessage, DemoSession, DemoTranslation, SystemE
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ElButton, ElDatePicker, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElMessage, ElMessageBox, ElOption, ElPopover, ElSelect, ElTable, ElTableColumn, ElTooltip } from 'element-plus';
-import { QiArchive, QiAttachment, QiBookOpen, QiClock, QiCrossCircleCenter, QiEmojiSmile, QiInbox, QiMore, QiRobot, QiSearch, QiSendRight, QiTransfer, QiTranslate, QiUser, QiUser3 } from 'qingicon-vue';
+import { QiArchive, QiAttachment, QiBookOpen, QiClock, QiCrossCircleCenter, QiCursorClick, QiEmojiSmile, QiInbox, QiInboxLine, QiMore, QiRobot, QiSearch, QiSendRight, QiTransfer, QiTranslate, QiUser, QiUser3 } from 'qingicon-vue';
 
 import type { ChannelType } from '#/features/channels/channel-data';
 
@@ -350,14 +350,6 @@ watch(group, () => {
   endedChannel.value = '';
 });
 
-const emptyText = computed(() => ({
-  ai: '暂无 AI 成员接待中的会话',
-  all: '暂无可见的未结束会话',
-  colleagues: '暂无同事接待中的会话',
-  ended: '没有符合条件的已结束会话',
-  mine: '暂无由你接待的会话，可从「待分配」或「AI 成员」接管',
-  pending: '暂无等待分配的会话',
-})[group.value]);
 /* 分组数字口径：该分组当前进行中的会话数，与未读无关 */
 const groupCounts = computed(() => {
   const open = store.sessions.filter((session) => session.status === 'active' || session.status === 'pending');
@@ -1022,8 +1014,8 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
             </span>
           </button>
           <div v-if="!visible.length" class="list-empty">
-            <span class="empty-dot"></span>
-            <p>{{ listFiltersActive ? '未找到符合条件的会话' : emptyText }}</p>
+            <span class="empty-icon"><QiInboxLine :size="18" /></span>
+            <p>{{ listFiltersActive ? '未找到符合条件的会话' : '暂无会话' }}</p>
             <button v-if="listFiltersActive" type="button" class="clear-filters" @click="clearListFilters">清除筛选条件</button>
           </div>
         </div>
@@ -1222,6 +1214,12 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
           </span>
         </ElTooltip>
       </footer>
+    </main>
+    <main v-else class="chat-pane is-empty">
+      <div class="chat-empty">
+        <span class="empty-icon"><QiCursorClick :size="18" /></span>
+        <p>请选择会话</p>
+      </div>
     </main>
     </div>
 
@@ -1448,8 +1446,10 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
 .conv-mid small { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--ink-2); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .wait { flex: 0 0 auto; margin-left: auto; color: var(--ink-3); font-size: 10px; }
 .unread { display: grid; flex: 0 0 20px; width: 20px; height: 20px; padding: 0; font-size: 11px; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 500; line-height: 1; color: #fff; background: var(--danger); border-radius: 50%; place-items: center; }
-.list-empty { display: grid; gap: 8px; place-items: center; padding: 48px 20px; color: var(--ink-3); font-size: 12px; text-align: center; }
-.empty-dot { width: 26px; height: 26px; border: 1px dashed var(--line-strong); border-radius: 50%; }
+.list-empty { display: grid; gap: 12px; place-items: center; padding: 48px 20px; color: var(--ink); font-size: 13px; line-height: 1.5; text-align: center; }
+.list-empty p { margin: 0; }
+.list-empty .clear-filters { justify-self: center; }
+.empty-icon { display: grid; width: 36px; height: 36px; color: #666; background: #f6f6f7; border-radius: 10px; place-items: center; }
 
 /* ---------- 第三栏 ---------- */
 .chat-pane {
@@ -1461,6 +1461,9 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
   border: 0;
   border-radius: 0;
 }
+.chat-pane.is-empty { align-items: center; justify-content: center; }
+.chat-empty { display: grid; gap: 12px; color: var(--ink); font-size: 13px; line-height: 1.5; text-align: center; place-items: center; }
+.chat-empty p { margin: 0; }
 .notice-banner {
   display: flex;
   align-items: center;
