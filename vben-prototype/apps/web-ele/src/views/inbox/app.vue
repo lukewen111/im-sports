@@ -906,7 +906,7 @@ const editable = computed(() => access.isAdmin && access.permissions.customers !
 </script>
 
 <template>
-  <div class="inbox-page" :class="{ 'is-detail-collapsed': detailCollapsed }">
+  <div class="inbox-page" :class="{ 'is-detail-collapsed': detailCollapsed, 'is-empty': !active }">
     <aside class="group-rail">
       <header class="rail-head">
         <span class="rail-title">聊天</span>
@@ -1672,6 +1672,8 @@ a.attachment-name { text-decoration: underline; }
 .inbox-page .info-card { min-width: 0; min-height: 0; margin: 12px 12px 12px 0; overflow: hidden; border: 0; }
 .inbox-page.is-detail-collapsed .info-card { margin-right: 0; }
 .inbox-page.is-detail-collapsed { --detail-width: 32px; }
+/* 无会话时不保留右侧详情列，白色工作区铺满右栏 */
+.inbox-page.is-empty { --detail-width: 0px; }
 .info-toggle { display: none; }
 .info-card-close { display: none; }
 .customer-summary { display: flex; align-items: center; gap: 10px; padding: 16px; }
